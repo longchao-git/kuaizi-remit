@@ -1,0 +1,10 @@
+export function pickPdf(
+  maxBytes: number,
+  callback: (status: string, path: string, name: string, size: number) => void,
+): void {
+  RemitPdfAndroid.pick(maxBytes, callback)
+}
+
+export function releasePdf(path: string): void {
+  RemitPdfAndroid.release(path)
+}

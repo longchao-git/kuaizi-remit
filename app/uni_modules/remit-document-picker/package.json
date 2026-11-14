@@ -1,0 +1,8 @@
+{
+  "id": "remit-document-picker",
+  "displayName": "筷子闪汇 PDF 文件选择",
+  "version": "1.0.0",
+  "description": "通过系统文件选择器读取汇款补件 PDF",
+  "engines": { "HBuilderX": "^4.25" },
+  "uni_modules": {}
+}

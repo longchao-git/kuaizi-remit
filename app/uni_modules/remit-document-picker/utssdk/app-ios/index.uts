@@ -1,0 +1,15 @@
+import { UTSiOS } from 'DCloudUTSFoundation'
+import { DispatchQueue } from 'Dispatch'
+
+export function pickPdf(
+  maxBytes: number,
+  callback: (status: string, path: string, name: string, size: number) => void,
+): void {
+  DispatchQueue.main.async(execute = (): void => {
+    RemitPdfIOS.pick(UTSiOS.getCurrentViewController(), maxBytes, callback)
+  })
+}
+
+export function releasePdf(path: string): void {
+  RemitPdfIOS.release(path)
+}

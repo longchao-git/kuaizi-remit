@@ -1,0 +1,16 @@
+{
+  "name": "uni-app-template",
+  "version": "1.0.0",
+  "description": "uni-app Vue3 项目模板",
+  "dependencies": {
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.32",
+    "sass": "1.108.2",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

@@ -1,0 +1,95 @@
+{
+	"easycom": {
+		"autoscan": true
+	},
+	"pages": [
+		{
+			"path": "modules/remit/RemitPage",
+			"style": {
+				"navigationStyle": "custom",
+				"backgroundColor": "#F2F2F2"
+			}
+		},
+		{
+			"path": "modules/home/pages/HomePage",
+			"style": {
+				"navigationStyle": "custom",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "modules/profile/pages/MyPage",
+			"style": {
+				"navigationStyle": "custom",
+				"enablePullDownRefresh": false
+			}
+		}
+	],
+	"subPackages": [
+		{
+			"root": "subPackages/login",
+			"pages": [
+				{
+					"path": "pages/LoginPage",
+					"style": {
+						"navigationStyle": "custom",
+						"enablePullDownRefresh": false
+					}
+				}
+			]
+		},
+		{
+			"root": "subPackages/profile",
+			"pages": [
+				{
+					"path": "pages/ProfileEditPage",
+					"style": {
+						"navigationStyle": "custom",
+						"enablePullDownRefresh": false
+					}
+				}
+			]
+		},
+		{
+			"root": "subPackages/showcase",
+			"pages": [
+				{
+					"path": "pages/PatternShowcasePage",
+					"style": { "navigationStyle": "custom" }
+				},
+				{
+					"path": "pages/ComponentShowcasePage",
+					"style": {
+						"navigationStyle": "custom"
+					}
+				}
+			]
+		}
+	],
+	"tabBar": {
+		"color": "#3B3A3A",
+		"selectedColor": "#FF7138",
+		"borderStyle": "white",
+		"backgroundColor": "#FFFFFF",
+		"list": [
+			{
+				"pagePath": "modules/home/pages/HomePage",
+				"iconPath": "/static/icon/tab-home.png",
+				"selectedIconPath": "/static/icon/tab-home-active.png",
+				"text": "首页"
+			},
+			{
+				"pagePath": "modules/profile/pages/MyPage",
+				"iconPath": "/static/icon/tab-my.png",
+				"selectedIconPath": "/static/icon/tab-my-active.png",
+				"text": "我的"
+			}
+		]
+	},
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "应用名称",
+		"navigationBarBackgroundColor": "#FFFFFF",
+		"backgroundColor": "#FFFFFF"
+	}
+}

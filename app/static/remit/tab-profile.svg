@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="&#233;&#161;&#185;&#231;&#155;&#174;&#229;&#175;&#188;&#232;&#136;&#170;&#229;&#155;&#190;&#230;&#160;&#135;">
+<mask id="mask0_0_98" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="60" height="60">
+<rect id="Rectangle 3444" x="0.5" y="0.5" width="59" height="59" fill="#D9D9D9" stroke="#CCCCCC"/>
+</mask>
+<g mask="url(#mask0_0_98)">
+<circle id="Ellipse 2112" cx="30" cy="30" r="18.1818" stroke-width="4" stroke="#CCCCCC"/>
+<path id="Vector 11375" d="M26.3636 24.5455L26.3636 27.2727" stroke-width="4" stroke-linecap="round" stroke="#CCCCCC"/>
+<path id="Vector 11376" d="M33.6364 24.5455L33.6364 27.2727" stroke-width="4" stroke-linecap="round" stroke="#CCCCCC"/>
+<path id="Vector 11377" d="M21.8182 30.9091C22.5758 32.4837 25.2727 35.633 30 35.633C34.7273 35.633 37.4244 32.4837 38.182 30.9091" stroke-width="4" stroke-linecap="round" stroke="#CCCCCC"/>
+</g>
+</g>
+</svg>
