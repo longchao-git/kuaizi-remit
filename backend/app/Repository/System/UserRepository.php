@@ -96,6 +96,31 @@ final class UserRepository extends AbstractRepository
         $this->query()->create(['name' => '汇款联调账号', 'email' => $email, 'password' => $password]);
     }
 
+    /** 初始化管理端员工账号。 */
+    public function createPlatformStaff(string $email, string $name, string $password): User
+    {
+        $staff = new User;
+        $staff->forceFill([
+            'name' => $name,
+            'email' => $email,
+            'password' => $password,
+            'is_platform_staff' => true,
+        ])->saveOrFail();
+
+        return $staff;
+    }
+
+    /** 重置已有账号为可登录的员工账号，并作废旧的后台令牌。 */
+    public function resetPlatformStaff(User $staff, string $name, string $password): void
+    {
+        $staff->forceFill([
+            'name' => $name,
+            'password' => $password,
+            'is_platform_staff' => true,
+        ])->saveOrFail();
+        $staff->tokens()->where('name', 'platform')->delete();
+    }
+
     /** 手机号为独立唯一标识，旧表必填邮箱保留为内部值。 */
     public function findOrRegisterMobile(string $mobile): User
     {

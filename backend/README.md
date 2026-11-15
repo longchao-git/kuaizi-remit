@@ -22,7 +22,30 @@ php artisan serve --host=127.0.0.1 --port=8688
 
 `GET /api/health` 可用于检查 API 进程及 `code/msg/data` 响应格式。当前健康检查不依赖数据库。`GET /up` 是 Laravel 自带的启动检查。
 
-在 `backend/` 执行 `composer test` 和 `php vendor/bin/pint --test` 可运行测试和格式检查。
+在 `backend/` 执行 `composer test` 和 `php vendor/bin/pint --test` 可运行测试和格式检查。测试固定使用内存 SQLite（`phpunit.xml` 覆盖 `$_ENV` 与 `$_SERVER`），不会连接本地 MySQL。
+
+### Docker 本地运行
+
+API 容器 `kuaizi-remit-api` 直接定义在 mt_sas 编排的 `docker-compose.yml` 中，与 `sas-mysql` 同属 `mt_sas_default` 网络，数据库主机名用 `mysql`。本地库为 `kuaizi_remit`，账号沿用 `root` / `root_pass`。镜像由本目录的 `Dockerfile` 构建，首次启动会自动生成 `.env`、APP_KEY、安装 Composer 依赖并执行迁移。
+
+前提是数据库已创建：
+
+```bash
+docker exec sas-mysql mysql -uroot -proot_pass -e "CREATE DATABASE IF NOT EXISTS kuaizi_remit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+```
+
+在 mt_sas 目录启动 API（加上 override 与当前运行栈保持一致）：
+
+```bash
+cd /home/tbb/programs/mt_sas
+docker compose -f docker-compose.yml -f /home/tbb/programs/mt_storage/deploy/docker-compose.sas-nginx.override.yml up -d kuaizi-remit-api
+curl http://127.0.0.1:8688/api/health
+docker logs -f kuaizi-remit-api
+```
+
+`.env` 只在缺失时生成，后续修改容器环境变量（如数据库密码）需要同步修改 `backend/.env`，`artisan serve` 的子进程只读取该文件。需要处理队列时，可临时在前台运行 `docker exec -it kuaizi-remit-api php artisan queue:work`。
+
+根路径 `/` 是 Laravel 默认欢迎页，依赖 Vite 产物；只调试 API 时无需处理，需要访问欢迎页时先在 `backend/` 执行 `npm install && npm run build`（容器内不包含 Node）。
 
 ### 本地汇款联调账号
 
@@ -30,11 +53,21 @@ php artisan serve --host=127.0.0.1 --port=8688
 
 App 开发模式设置 `VITE_REMIT_LOCAL_LOGIN=true` 后，登录页会显示「使用测试账号」。试算需另设置 `REMIT_LOCAL_RATE_TEN_THOUSANDTHS`（如 `80540` 表示 `8.0540`），并通过后台保存费用和 ETA 规则。试算不锁汇、不生成订单、不能付款。环境或邮箱配置关闭后，已签发的联调令牌也失效。
 
-App 也可用西班牙手机号和测试验证码 123456 登录。先执行数据库迁移，再在本地后端设置 app 环境为 local、REMIT_LOCAL_SMS_LOGIN=true。测试登录默认关闭，只在 App 开发模式显示。同号首次登录会创建测试会员，之后复用该会员。测试方式不发送真实短信，线上 API 和线上会话不接受此验证码。
+App 也可用西班牙手机号和短信验证码登录。先执行数据库迁移，再在本地后端设置 app 环境为 local、`REMIT_LOCAL_SMS_LOGIN=true`、`REMIT_SMS_CHANNEL=log`。开启 `REMIT_SMS_TEST_AUTOFILL=true` 后，`/api/app/auth/sms-code` 会在响应里返回随机验证码，App 开发模式自动回填，无需真实短信。验证码 5 分钟有效、单次使用、最多试 5 次。测试登录默认关闭，只在 App 开发模式显示。同号首次登录会创建测试会员，之后复用该会员。线上 API 和线上会话不接受本地测试登录。生产短信渠道尚未接入，生产环境该流程返回 404。
 
 ### 平台员工角色
 
 `REMIT_PLATFORM_ADMIN_EMAILS` 填已有员工邮箱，多个邮箱以逗号分隔。管理员登录后可通过「员工角色」分配运营、客服或只读角色，在「操作审计」查询已落地的后台操作。其他现有员工在首次分配角色前保留原有权限。保存新角色后员工须重新登录。
+
+### 管理端账号
+
+管理端用 `POST /api/user/login` 登录，账号为员工邮箱。初始化账号：
+
+```bash
+docker exec -it kuaizi-remit-api php artisan remit:create-admin admin@kuaizi.local --password='Admin@123456'
+```
+
+邮箱已存在时命令不会覆盖，需加 `--force` 重置密码并恢复员工标记（旧的后台令牌同时作废）。是否拥有管理员全量权限取决于该邮箱是否在 `REMIT_PLATFORM_ADMIN_EMAILS` 中；修改后重启容器生效。
 
 ## Reverb WebSocket
 

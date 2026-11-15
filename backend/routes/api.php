@@ -108,8 +108,8 @@ Route::middleware('auth:sanctum')->prefix('admin/remittance')->group(function ()
 });
 
 Route::post('/app/auth/local-login', [MemberSessionController::class, 'loginLocal'])->middleware('throttle:10,1');
-Route::post('/app/auth/sms-code', [MemberSessionController::class, 'sendSms'])->middleware('throttle:5,1,member-sms-send');
-Route::post('/app/auth/sms-login', [MemberSessionController::class, 'loginSms'])->middleware('throttle:10,1,member-sms-check');
+Route::post('/app/auth/sms-code', [MemberSessionController::class, 'sendSms'])->middleware('throttle:sms-send');
+Route::post('/app/auth/sms-login', [MemberSessionController::class, 'loginSms'])->middleware('throttle:sms-login');
 Route::middleware(['auth:sanctum', RequireMemberToken::class])->prefix('app')->group(function () {
     Route::get('/auth/current', [MemberSessionController::class, 'current']);
     Route::post('/auth/logout', [MemberSessionController::class, 'logout']);

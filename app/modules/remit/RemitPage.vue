@@ -379,6 +379,7 @@ const tabs = [
 const screen = ref(1);
 const localLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_LOGIN === 'true';
 const smsLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_SMS_LOGIN !== "false";
+const smsAutofillEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_SMS_AUTOFILL !== "false";
 const demoEnabled = !smsLoginEnabled && (import.meta.env.DEV || import.meta.env.VITE_REMIT_DEMO === "true");
 const localSessionOpen = ref((localLoginEnabled || smsLoginEnabled) && sessionService.isLoggedIn());
 const localSession = ref<InstanceType<typeof RemitLocalSession>>();
@@ -809,13 +810,17 @@ async function requestCode() {
   refreshCountdown();
   try {
     smsBusy.value = true;
+    let testCode: string | undefined;
     if (issuedFor !== number || remaining.value === 0) {
-      if (smsLoginEnabled) await memberAuth.sendRemitSms("+34" + number);
+      if (smsLoginEnabled) {
+        const result = await memberAuth.sendRemitSms("+34" + number);
+        testCode = smsAutofillEnabled ? result?.test_code : undefined;
+      }
       if (mobile.value !== number || screen.value !== currentScreen) return;
       issuedFor = number;
       startCountdown();
     }
-    code.value = "";
+    code.value = testCode ?? "";
     codeError.value = "";
     go(3);
   } catch (reason) {

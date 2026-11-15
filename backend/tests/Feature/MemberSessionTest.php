@@ -10,18 +10,32 @@ class MemberSessionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_fixed_code_signs_into_the_same_local_account_and_is_blocked_in_production(): void
+    public function test_sms_code_signs_into_the_same_local_account_and_is_blocked_in_production(): void
     {
         $this->app->instance('env', 'local');
-        config(['remit.local_sms_login' => true]);
+        config(['remit.local_sms_login' => true, 'remit.sms.test_autofill' => true]);
         $mobile = ['mobile' => '+34600000000'];
+
         $this->postJson('/api/app/auth/sms-code', ['mobile' => '+33600000000'])->assertUnprocessable();
-        $this->postJson('/api/app/auth/sms-code', $mobile)->assertJsonPath('data', true);
+        $code = $this->postJson('/api/app/auth/sms-code', $mobile)
+            ->assertJsonPath('data.sent', true)
+            ->json('data.test_code');
+        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', $code);
+
         $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => '000000'])->assertJsonPath('code', 1001);
         $this->assertDatabaseCount('users', 0);
-        $first = $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => '123456'])->assertJsonPath('code', 0);
-        $second = $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => '123456'])
+
+        $first = $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => $code])->assertJsonPath('code', 0);
+
+        // 验证码单次消费，重复使用失败。
+        $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => $code])->assertJsonPath('code', 1001);
+
+        $this->travel(61)->seconds();
+        $nextCode = $this->postJson('/api/app/auth/sms-code', $mobile)->json('data.test_code');
+        $second = $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => $nextCode])
+            ->assertJsonPath('code', 0)
             ->assertJsonPath('data.member', $first->json('data.member'));
+
         $this->assertDatabaseHas('users', ['phone_e164' => $mobile['mobile']]);
         $this->assertDatabaseCount('users', 1);
         $this->withToken($second->json('data.token'))->getJson('/api/app/auth/current')
@@ -32,21 +46,28 @@ class MemberSessionTest extends TestCase
         $this->getJson('/api/app/auth/current')->assertUnauthorized();
         $this->app['auth']->forgetGuards();
 
+        // 先让发送限流窗口过期，生产环境才能命中 404 门禁。
+        $this->travel(61)->seconds();
         $this->app->instance('env', 'production');
         $this->postJson('/api/app/auth/sms-code', $mobile)->assertNotFound();
-        $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => '123456'])->assertNotFound();
+        $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => $nextCode])->assertNotFound();
         $this->withToken($first->json('data.token'))->getJson('/api/app/auth/current')->assertUnauthorized();
     }
 
-    public function test_fixed_code_is_disabled_by_default_and_cannot_sign_in_staff(): void
+    public function test_sms_login_is_disabled_by_default_and_cannot_sign_in_staff(): void
     {
         $this->app->instance('env', 'local');
         config(['remit.local_sms_login' => false]);
         $input = ['mobile' => '+34600000000', 'code' => '123456'];
         $this->postJson('/api/app/auth/sms-login', $input)->assertNotFound();
-        config(['remit.local_sms_login' => true]);
+
+        config(['remit.local_sms_login' => true, 'remit.sms.test_autofill' => true]);
+        $code = $this->postJson('/api/app/auth/sms-code', ['mobile' => $input['mobile']])
+            ->assertJsonPath('data.sent', true)
+            ->json('data.test_code');
         User::factory()->create(['phone_e164' => $input['mobile'], 'is_platform_staff' => true]);
-        $this->postJson('/api/app/auth/sms-login', $input)->assertJsonPath('code', 1001);
+        $this->postJson('/api/app/auth/sms-login', ['mobile' => $input['mobile'], 'code' => $code])
+            ->assertJsonPath('code', 1001);
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 

@@ -2,6 +2,7 @@ import request from '@/request/http';
 import type { CurrentUser } from '@/modules/profile/domain/CurrentUser';
 import type { LoginForm } from '../domain/LoginForm';
 import type { LoginResponse } from '../domain/LoginResponse';
+import type { SmsSendResult } from '../domain/SmsSendResult';
 
 export class AuthRepository {
   private readonly basePath = 'app/auth';
@@ -26,7 +27,7 @@ export class AuthRepository {
     return await request.post(`${this.basePath}/logout`, {}, { handleUnauthorized: false });
   }
 
-  async sendRemitSms(mobile: string): Promise<boolean> {
+  async sendRemitSms(mobile: string): Promise<SmsSendResult> {
     return await request.post(this.basePath + '/sms-code', { mobile }, { handleUnauthorized: false });
   }
 
@@ -34,8 +35,8 @@ export class AuthRepository {
     return await request.post(this.basePath + '/sms-login', { mobile, code }, { handleUnauthorized: false });
   }
 
-  async sendSms(mobile: string): Promise<boolean> {
-    return await request.post<boolean>(`${this.basePath}/sms-code`, { mobile });
+  async sendSms(mobile: string): Promise<SmsSendResult> {
+    return await request.post<SmsSendResult>(`${this.basePath}/sms-code`, { mobile });
   }
 
   async smsLogin(mobile: string, code: string, bindingToken?: string): Promise<LoginResponse> {

@@ -5,19 +5,27 @@ namespace App\Controller\Common;
 use App\Controller\AbstractController;
 use App\Repository\System\UserRepository;
 use App\Service\System\MemberSessionService;
+use App\Service\System\SmsCodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 final class MemberSessionController extends AbstractController
 {
     private const SPANISH_MOBILE = 'regex:/^\+34[67][0-9]{8}$/D';
 
-    public function sendSms(Request $request, MemberSessionService $sessions): JsonResponse
+    public function sendSms(Request $request, MemberSessionService $sessions, SmsCodeService $codes): JsonResponse
     {
         abort_unless($sessions->localSmsEnabled(), 404);
-        $request->validate(['mobile' => ['required', 'string', self::SPANISH_MOBILE]]);
+        $input = $request->validate(['mobile' => ['required', 'string', self::SPANISH_MOBILE]]);
 
-        return $this->success(true, '已进入测试验证码流程');
+        try {
+            $result = $codes->send($input['mobile'], $request->ip());
+        } catch (RuntimeException) {
+            return $this->fail(503, '短信发送失败，请稍后重试');
+        }
+
+        return $this->success($result, '验证码已发送');
     }
 
     public function loginSms(Request $request, MemberSessionService $sessions): JsonResponse
@@ -27,7 +35,7 @@ final class MemberSessionController extends AbstractController
             'mobile' => ['required', 'string', self::SPANISH_MOBILE],
             'code' => ['required', 'string', 'regex:/^[0-9]{6}$/D'],
         ]);
-        $result = $sessions->loginLocalSms($input['mobile'], $input['code']);
+        $result = $sessions->loginSms($input['mobile'], $input['code']);
 
         return $result->isSuccess() ? $this->success($result->getData(), $result->getMsg())
             : $this->fail($result->getCode(), $result->getMsg());

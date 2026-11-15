@@ -4,6 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_BASE_URL?: string;
   readonly VITE_REMIT_LOCAL_LOGIN?: string;
   readonly VITE_REMIT_LOCAL_SMS_LOGIN?: string;
+  readonly VITE_REMIT_SMS_AUTOFILL?: string;
   readonly VITE_REMIT_PUSH_ENABLED?: string;
   readonly VITE_REMIT_DEMO?: string;
   readonly VITE_REVERB_URL?: string;

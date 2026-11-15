@@ -47,9 +47,19 @@ uni.scss
 
 ## 运行
 
-当前模板采用 HBuilderX-only 流程，不提供 npm dev/build/check 脚本。复制目录后用 HBuilderX 打开并选择目标平台运行；交付前至少完成一次目标平台运行和发行构建。若团队需要 CLI 或 CI，请在复制后的项目中统一接入，不要同时维护两套构建方式。
+App 和小程序仍用 HBuilderX 打开 `app` 目录运行，交付前至少完成一次目标平台运行和发行构建。
 
-复制 `.env.example` 为 `.env.local` 并配置 `VITE_APP_BASE_URL`。真机和微信开发者工具不能通过 `127.0.0.1` 访问开发电脑，还需要配置可访问的 HTTPS 地址及微信 request/uploadFile 合法域名。
+H5 也可以在命令行运行（uni-app Vue3 CLI，Node 24+）：
+
+```bash
+npm install
+npm run dev:h5    # http://localhost:5173
+npm run build:h5  # 产物在 unpackage/dist/build/h5
+```
+
+项目沿用 HBuilderX 目录结构（`manifest.json`、`pages.json` 在根目录），`scripts/h5.mjs` 会在 CLI 启动前把 `UNI_INPUT_DIR` 指向根目录。
+
+复制 `.env.example` 为 `.env.local` 并配置 `VITE_APP_BASE_URL`（H5 本地默认回退到 `http://127.0.0.1:8688/api/`，后端已开启 CORS）。真机和微信开发者工具不能通过 `127.0.0.1` 访问开发电脑，还需要配置可访问的 HTTPS 地址及微信 request/uploadFile 合法域名。
 
 模板没有 mock。默认接口与 `api/spring-boot` 的 App 端点配套：短信/微信登录、微信手机关联、退出、当前会员、资料修改和文件上传，成功业务码为 `0`。需配置实际短信与微信服务，不能使用固定验证码；身份冲突不自动合并。更换后端时需同步调整 Repository 与 `request/http.ts` 的响应解包。
 

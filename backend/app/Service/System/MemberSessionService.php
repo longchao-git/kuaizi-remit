@@ -18,7 +18,7 @@ final class MemberSessionService
 
     public const LOCAL_SMS_TOKEN_NAME = 'remit-local-sms';
 
-    public function __construct(private UserRepository $users, private DatabaseManager $database) {}
+    public function __construct(private UserRepository $users, private DatabaseManager $database, private SmsCodeService $codes) {}
 
     /** 只有本地环境且明确设置账号邮箱，才允许使用联调登录。 */
     public function localLoginEmail(): ?string
@@ -52,10 +52,10 @@ final class MemberSessionService
         return app()->isLocal() && config('remit.local_sms_login') === true;
     }
 
-    /** 本地联调使用固定验证码。会员创建与令牌签发同事务提交。 */
-    public function loginLocalSms(string $mobile, string $code): Result
+    /** 校验短信验证码后登录，首次登录自动创建会员。 */
+    public function loginSms(string $mobile, string $code): Result
     {
-        if (! $this->localSmsEnabled() || ! hash_equals('123456', $code)) {
+        if (! $this->localSmsEnabled() || ! $this->codes->verify($mobile, $code)) {
             return Result::fail('验证码错误', ErrorCode::INVALID_CREDENTIALS);
         }
 
