@@ -8,7 +8,7 @@
       <el-button :disabled="loading" @click="reset">重置</el-button>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无报价记录'">
+    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无报价记录'">
       <el-table-column type="expand">
         <template #default="{ row }">
           <el-descriptions :column="2" border class="snapshot">
@@ -176,6 +176,11 @@ onMounted(() => void load(1))
 .records-page h1 { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .filters :deep(.el-form-item), .filters .el-button { margin: 0; }
+.filters .el-button,
+.filters :deep(.el-input__wrapper) { box-sizing: border-box; height: var(--omc-control-height); }
+@media (max-width: 1150px) {
+  .filters :deep(.el-input) { width: 174px; }
+}
 .snapshot { margin: 12px 24px; }
 .margin-action { margin: 0 24px 12px; }
 .margin-result { margin-top: 16px; }

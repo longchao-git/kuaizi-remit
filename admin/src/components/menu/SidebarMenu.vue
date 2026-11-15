@@ -1,7 +1,8 @@
 <template>
   <div class="primary-sidebar">
     <div class="primary-sidebar__brand">
-      <img src="@/assets/icon/headerLogo.png" alt="logo" class="primary-sidebar__logo" />
+      <span class="primary-sidebar__logo" aria-hidden="true">KZ</span>
+      <span class="primary-sidebar__brand-name">筷子闪汇</span>
     </div>
     <div class="primary-sidebar__list">
       <button
@@ -75,8 +76,8 @@ const handleClick = (menu: MenuVO) => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #202033;
-  color: #fff;
+  background: linear-gradient(180deg, var(--omc-color-sidebar-top), var(--omc-color-sidebar-bottom));
+  color: var(--omc-color-surface);
 }
 
 .primary-sidebar__brand {
@@ -84,14 +85,23 @@ const handleClick = (menu: MenuVO) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
 }
 
 .primary-sidebar__logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-top: 24px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--omc-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.primary-sidebar__brand-name {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .primary-sidebar__list {
@@ -111,21 +121,22 @@ const handleClick = (menu: MenuVO) => {
   justify-content: flex-start;
   gap: 8px;
   border: 0;
-  border-radius: 2px;
+  border-radius: var(--omc-radius-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--omc-color-sidebar-text);
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .primary-sidebar__item:hover {
-  background: var(--omc-color-primary);
-  color: #fff;
+  background: var(--omc-color-sidebar-hover);
+  color: var(--omc-color-surface);
 }
 
 .primary-sidebar__item.is-active {
-  background: var(--omc-color-primary);
-  color: #fff;
+  background: var(--omc-color-sidebar-active);
+  box-shadow: inset 2px 0 var(--omc-color-sidebar-indicator);
+  color: var(--omc-color-sidebar-active-text);
 }
 
 .primary-sidebar__icon {

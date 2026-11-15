@@ -76,7 +76,7 @@ import {
 defineOptions({ name: 'AppLayout' })
 
 const PRIMARY_SIDEBAR_WIDTH = 120
-const SECONDARY_SIDEBAR_WIDTH = 120
+const SECONDARY_SIDEBAR_WIDTH = 144
 
 const route = useRoute()
 const router = useRouter()
@@ -139,7 +139,7 @@ const doLogout = async () => {
 <style scoped>
 .layout {
   height: 100vh;
-  background: #f7f8fa;
+  background: var(--omc-color-surface-soft);
 }
 
 .body {
@@ -149,7 +149,7 @@ const doLogout = async () => {
 .aside {
   height: 100%;
   flex: 0 0 auto;
-  background: #fff;
+  background: var(--omc-color-surface);
 }
 
 .aside-shell {
@@ -173,8 +173,10 @@ const doLogout = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 16px 0;
+  padding: 0 16px;
   flex: 0 0 auto;
+  background: var(--omc-color-surface);
+  border-bottom: 1px solid var(--omc-color-border-light);
 }
 
 .page-header__title-wrap {
@@ -204,16 +206,16 @@ const doLogout = async () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #909399;
+  color: var(--omc-color-text-secondary);
   font-weight: 400;
 }
 
 .page-header__breadcrumb-left:hover :deep(.el-breadcrumb__inner) {
-  color: #606266;
+  color: var(--omc-color-primary);
 }
 
 .page-header__breadcrumb-right :deep(.el-breadcrumb__inner) {
-  color: #383838;
+  color: var(--omc-color-text);
   font-weight: 500;
 }
 
@@ -232,7 +234,7 @@ const doLogout = async () => {
 
 .page-header__title {
   font-size: 14px;
-  color: #000;
+  color: var(--omc-color-text);
 }
 
 .page-header__right {
@@ -247,10 +249,10 @@ const doLogout = async () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px 0 0 999px;
-  background: #ffffff;
-  color: #666;
-  border: 1px solid #f0f0f0;
+  border-radius: 999px;
+  background: var(--omc-color-surface);
+  color: var(--omc-color-text-secondary);
+  border: 1px solid var(--omc-color-border-light);
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
@@ -264,7 +266,7 @@ const doLogout = async () => {
 .page-header__user-arrow {
   flex: 0 0 auto;
   font-size: 12px;
-  color: #9aa3b2;
+  color: var(--omc-color-muted);
 }
 
 .main {

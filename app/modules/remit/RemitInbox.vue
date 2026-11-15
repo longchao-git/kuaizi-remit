@@ -8,19 +8,27 @@
     <text v-else-if="error" class="description offer" role="alert">{{ error }}</text>
     <text v-else-if="!displayed.length" class="description">暂无消息</text>
 
-    <view v-for="item in displayed" :key="item.reference ?? item.id" class="card inbox-item">
-      <view class="line">
-        <text class="inbox-title">{{ item.title }}</text>
-        <text v-if="!item.read_at" class="pill">未读</text>
+    <template v-for="{ item, dateLabel } in datedNotices" :key="item.reference ?? item.id">
+      <text v-if="dateLabel" class="inbox-date">{{ dateLabel }}</text>
+      <view class="card inbox-item">
+        <view class="inbox-icon" :class="{ 'order-icon': item.order_reference }">
+          <image :src="item.order_reference ? '/static/remit/tab-orders.svg' : '/static/remit/mail.svg'" mode="aspectFit" />
+        </view>
+        <view class="inbox-copy">
+          <view class="line">
+            <text class="inbox-title">{{ item.title }}</text>
+            <text v-if="!item.read_at" class="inbox-unread">未读</text>
+          </view>
+          <text class="inbox-body">{{ item.body }}</text>
+          <text class="inbox-time">{{ formatTime(item.created_at) }}</text>
+          <view v-if="!item.read_at || item.support_ticket_id || item.order_reference" class="inbox-item-actions">
+            <button v-if="item.support_ticket_id" class="inline-action accent" :disabled="busy" @tap="openTicket(item)">查看工单</button>
+            <button v-if="item.order_reference" class="inline-action accent" :disabled="busy" @tap="openOrder(item)">查看订单</button>
+            <button v-if="!item.read_at" class="inline-action accent" :disabled="busy" @tap="mark(item.reference ?? item.id)">标为已读</button>
+          </view>
+        </view>
       </view>
-      <text class="inbox-body">{{ item.body }}</text>
-      <view class="line">
-        <text class="description">{{ formatTime(item.created_at) }}</text>
-        <button v-if="!item.read_at" class="inline-action accent" :disabled="busy" @tap="mark(item.reference ?? item.id)">标为已读</button>
-      </view>
-      <button v-if="item.support_ticket_id" class="inline-action accent" :disabled="busy" @tap="openTicket(item)">查看工单</button>
-      <button v-if="item.order_reference" class="inline-action accent" :disabled="busy" @tap="openOrder(item)">查看订单</button>
-    </view>
+    </template>
     <view v-if="pages > 1" class="line inbox-actions">
       <button class="inline-action accent" :disabled="busy || page <= 1" @tap="load(page - 1)">上一页</button>
       <text class="description">{{ page }} / {{ pages }}</text>
@@ -32,6 +40,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
+import { localDateKey } from './previewOrder';
 
 type Notice = {
   id: number;
@@ -54,6 +63,19 @@ const displayed = computed(() => {
   const reference = (notice: Notice) => notice.reference ?? String(notice.id);
   return [items.value.find(item => reference(item) === reference(selected)) ?? selected,
     ...items.value.filter(item => reference(item) !== reference(selected))];
+});
+const datedNotices = computed(() => {
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const todayKey = localDateKey(today);
+  const yesterdayKey = localDateKey(yesterday);
+  let previous = '';
+  return displayed.value.map(item => {
+    const date = localDateKey(new Date(item.created_at));
+    const dateLabel = date === previous ? '' : date === todayKey ? '今天' : date === yesterdayKey ? '昨天' : date;
+    previous = date;
+    return { item, dateLabel };
+  });
 });
 const page = ref(1);
 const pages = ref(0);
@@ -147,15 +169,21 @@ function markAll() {
   if (latest.value !== undefined) void mark(latest.value, true);
 }
 
+async function markLinkedRead(item: Notice) {
+  if (item.read_at) return;
+  const result = await request.post<{ unread_count: number }>(`app/notifications/${item.reference ?? item.id}/read`, {}, options);
+  if (!active) return;
+  item.read_at = new Date().toISOString();
+  unread.value = result.unread_count;
+  emit('unread', result.unread_count);
+}
+
 function openTicket(item: Notice) {
   const ticket = item.support_ticket_id;
   if (!ticket) return;
   void run(async () => {
-    if (!item.read_at) {
-      const result = await request.post<{ unread_count: number }>(`app/notifications/${item.reference ?? item.id}/read`, {}, options);
-      emit('unread', result.unread_count);
-    }
-    emit('ticket', ticket);
+    await markLinkedRead(item);
+    if (active) emit('ticket', ticket);
   });
 }
 
@@ -163,19 +191,13 @@ function openOrder(item: Notice) {
   const reference = item.order_reference;
   if (!reference) return;
   void run(async () => {
-    if (!item.read_at) {
-      const result = await request.post<{ unread_count: number }>(`app/notifications/${item.reference ?? item.id}/read`, {}, options);
-      if (!active) return;
-      item.read_at = new Date().toISOString();
-      unread.value = result.unread_count;
-      emit('unread', result.unread_count);
-    }
+    await markLinkedRead(item);
     if (active) emit('order', reference);
   });
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 watch(() => props.targetNotice, (target) => {
@@ -189,9 +211,17 @@ onUnmounted(() => { active = false; });
 </script>
 
 <style scoped lang="scss">
-.inbox { display: grid; gap: 20rpx; padding: 24rpx 32rpx; }
-.inbox-item { display: grid; gap: 12rpx; padding: 22rpx; min-width: 0; }
+.inbox { display: grid; align-content: start; gap: 18rpx; padding: 24rpx 32rpx; }
+.inbox-date { padding: 8rpx 0 0; color: #6d7180; font-size: 24rpx; }
+.inbox-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18rpx; padding: 22rpx; }
+.inbox-icon { display: grid; place-items: center; width: 64rpx; height: 64rpx; background: #eeebff; border-radius: 20rpx; }
+.inbox-icon.order-icon { background: #e7f7ef; }
+.inbox-icon image { width: 34rpx; height: 34rpx; }
+.inbox-copy { display: grid; gap: 8rpx; min-width: 0; }
 .inbox-title { font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
-.inbox-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.inbox-unread { flex-shrink: 0; color: #5243cb; font-size: 22rpx; }
+.inbox-body { color: #5d6170; font-size: 24rpx; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inbox-time { color: #6d7180; font-size: 22rpx; }
+.inbox-item-actions { display: flex; gap: 18rpx; flex-wrap: wrap; }
 .inbox-actions { gap: 12rpx; }
 </style>

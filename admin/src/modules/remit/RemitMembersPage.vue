@@ -8,7 +8,7 @@
       <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
     </el-form>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="rows" :empty-text="loadError ? '读取失败' : '暂无会员'">
+    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="loadError ? '读取失败' : '暂无会员'">
       <el-table-column prop="id" label="会员编号" min-width="100" />
       <el-table-column prop="name" label="姓名" min-width="140" show-overflow-tooltip />
       <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />

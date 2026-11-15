@@ -174,6 +174,7 @@
       </button>
     </template>
 
+    <text v-if="formError && (screen === 9 || screen === 11)" class="callout warning" role="alert">{{ formError }}</text>
     <text v-if="screen === 22" class="callout">付款方式演示 · 确认后进入模拟付款核验</text>
     <view v-if="steps" class="card prototype-card" :class="{ 'linked-timeline': screen === 24 || screen === 29 }">
       <view
@@ -208,13 +209,18 @@
         </view>
         <view class="tile-copy">
           <text>{{ option.label }}</text>
-          <text v-if="screen === 20" class="muted">{{ paymentDetails[i] }}</text>
+          <template v-if="screen === 20">
+            <text class="muted">{{ paymentDetails[i]?.fee }} 通道费</text>
+            <text class="payment-option-total" :class="{ 'is-selected': payment === i }">
+              合计支付 {{ paymentDetails[i]?.total }}
+            </text>
+          </template>
         </view>
         <text class="radio" :class="{ checked: (screen === 13 ? documentType : payment) === i }" />
       </button>
     </view>
 
-    <text v-if="screen === 20" class="callout">
+    <text v-if="screen === 20" class="callout warning">
       Apple Pay 与卡支付通常另收汇款金额的 {{ channelRateLabel }}，最终金额以付款前展示为准。
     </text>
 
@@ -551,6 +557,7 @@ const previewIcons: Record<string, string> = {
   "▤": "/static/remit/document.svg",
 };
 const fields = reactive<Record<string, string>>({});
+const formError = ref("");
 const attachment = ref<PreviewAttachment | null>(null);
 let attachmentRequest = 0;
 const attachmentError = ref("");
@@ -579,7 +586,10 @@ const paymentTotal = computed(
   () => props.order?.total ?? quote.value.subtotal + channelFee.value,
 );
 const paymentDetails = computed(() =>
-  [0, 1, 2].map((channel) => euro(getPreviewChannelFee(quote.value.cents, channel)) + " 通道费"),
+  [0, 1, 2].map((channel) => {
+    const fee = getPreviewChannelFee(quote.value.cents, channel);
+    return { fee: euro(fee), total: euro(quote.value.subtotal + fee) };
+  }),
 );
 const status = computed(() =>
   props.screen === 22 && props.payment === 2 ? { symbol: "卡", tone: "waiting" } : statusIcons[props.screen],
@@ -627,6 +637,7 @@ const filteredFaq = computed(() =>
 watch(
   () => props.screen,
   (next, previous) => {
+    formError.value = "";
     if (previous === 28) attachmentRequest += 1;
     if (next === 28) {
       attachment.value = null;
@@ -706,7 +717,7 @@ function follow(next: number, index: number) {
       !mobile ||
       !/^(?:\+86)?1\d{10}$/.test(mobile)
     ) {
-      uni.showToast({ title: "请填写有效的银行卡资料", icon: "none" });
+      formError.value = "请填写有效的银行卡资料";
       return;
     }
     emit("add-account", bank + " · " + number.slice(-4));
@@ -716,7 +727,7 @@ function follow(next: number, index: number) {
   }
   if (props.screen === 11) {
     if (!purpose.value || !source.value) {
-      uni.showToast({ title: "请选择汇款用途和资金来源", icon: "none" });
+      formError.value = "请选择汇款用途和资金来源";
       return;
     }
     emit("order-information", purpose.value, source.value);

@@ -14,7 +14,7 @@
       <el-button :disabled="loading" @click="reset">重置</el-button>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="rows" border empty-text="暂无注销申请">
+    <el-table scrollbar-always-on v-loading="loading" :data="rows" border empty-text="暂无注销申请">
       <el-table-column prop="id" label="申请编号" width="92" />
       <el-table-column prop="member_id" label="会员编号" width="92" />
       <el-table-column label="状态" min-width="140">

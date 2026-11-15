@@ -1,7 +1,7 @@
 <template>
   <div class="remit-admin">
     <aside class="remit-sidebar">
-      <div class="remit-brand"><span class="remit-logo">K</span><strong>筷子闪汇</strong></div>
+      <div class="remit-brand"><span class="remit-logo" aria-hidden="true">KZ</span><strong>筷子闪汇</strong></div>
       <div class="remit-menu-title">汇款运营</div>
       <el-menu
         ref="menu"
@@ -375,61 +375,71 @@ function saveNote() {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 208px minmax(0, 1fr);
-  background: #f5f6f9;
+  background: var(--omc-color-surface-soft);
 }
 .remit-sidebar {
   position: sticky;
   top: 0;
   align-self: start;
-  max-height: 100vh;
+  height: 100vh;
   overflow-y: auto;
-  background: #fff;
-  border-right: 1px solid #ebeef3;
+  background: linear-gradient(180deg, var(--omc-color-sidebar-top), var(--omc-color-sidebar-bottom));
+  color: var(--omc-color-surface);
 }
 .remit-brand { height: 68px; display: flex; align-items: center; gap: 10px; padding: 0 20px; font-size: 18px; }
-.remit-logo { width: 32px; height: 32px; display: grid; place-items: center; background: #5e51f1; color: #fff; border-radius: 8px; font-weight: 800; }
-.remit-menu-title { padding: 18px 20px 6px; color: #778196; font-size: 12px; }
-.remit-menu { border-right: 0; }
+.remit-logo { width: 32px; height: 32px; display: grid; place-items: center; background: var(--omc-color-primary); color: var(--omc-color-surface); border-radius: var(--omc-radius-md); font-size: 12px; font-weight: 700; }
+.remit-menu-title { padding: 18px 20px 6px; color: var(--omc-color-sidebar-text); font-size: 12px; }
+.remit-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--omc-color-sidebar-text);
+  --el-menu-hover-bg-color: var(--omc-color-sidebar-hover);
+  --el-menu-active-color: var(--omc-color-sidebar-active-text);
+  border-right: 0;
+}
 .remit-menu :deep(.el-menu-item),
 .remit-menu :deep(.el-sub-menu__title) {
   height: 44px;
   line-height: 44px;
+  margin-inline: 8px;
+  border-radius: var(--omc-radius-sm);
 }
 .remit-menu :deep(.el-sub-menu .el-menu-item) {
   min-width: 0;
-  padding-inline-start: 46px;
+  padding-inline-start: 38px;
 }
-.remit-menu :deep(.el-menu-item:hover) {
-  background: #f5f7fa;
+.remit-menu :deep(.el-menu-item:hover),
+.remit-menu :deep(.el-sub-menu__title:hover) {
+  color: var(--omc-color-surface);
 }
 .remit-menu :deep(.el-menu-item.is-active) {
-  background: #edf4ff;
-  color: #1554c0;
+  background: var(--omc-color-sidebar-active);
+  box-shadow: inset 2px 0 var(--omc-color-sidebar-indicator);
+  color: var(--omc-color-sidebar-active-text);
   font-weight: 600;
 }
 .remit-sidebar-footer {
   margin: 12px 16px 16px;
   padding: 12px 4px 0;
-  border-top: 1px solid #ebeef3;
+  border-top: 1px solid var(--omc-color-sidebar-hover);
 }
 .remit-sidebar-footer a {
-  color: #526078;
+  color: var(--omc-color-sidebar-text);
   font-size: 13px;
 }
 .remit-main { min-width: 0; }
-.remit-topbar { height: 68px; background: white; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid #ebeef3; }
-.remit-main :deep(.page-container) { padding: 24px 28px; }
+.remit-topbar { height: 68px; background: var(--omc-color-surface); display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--omc-color-border-light); }
+.remit-main :deep(.page-container) { padding: 24px 28px; background: transparent; }
 .remit-title { display: flex; align-items: baseline; gap: 12px; }
-.remit-title h1 { margin: 0; font-size: 24px; }
-.remit-title span { color: #697589; }
+.remit-title h1 { margin: 0; }
+.remit-title span { color: var(--omc-color-text-secondary); }
 .remit-search {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 32px;
   padding: 16px;
-  background: white;
-  border-radius: 8px;
+  background: var(--omc-color-surface);
+  border-radius: var(--omc-radius-panel);
 }
 .remit-search :deep(.el-form-item) {
   align-items: center;

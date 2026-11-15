@@ -40,32 +40,77 @@ final class SessionController extends AbstractController
         $token = $this->staffToken($request);
         $user = $request->user();
 
-        $menus = [
-            ['remittance-rules', '付款与到账规则', 'remittance/rules', RemittancePermission::MANAGE_RULES],
-            ['remittance-operations', '运营配置', 'remittance/operations', RemittancePermission::MANAGE_RULES],
-            ['remittance-dashboard', '经营仪表盘', 'remittance/dashboard', RemittancePermission::VIEW_ORDERS],
-            ['remittance-quotes', '报价记录', 'remittance/quotes', RemittancePermission::MANAGE_RULES],
-            ['remittance-orders', '汇款订单', 'remittance/orders', RemittancePermission::VIEW_ORDERS],
-            ['remittance-reconciliation', '对账与结算', 'remittance/reconciliation', RemittancePermission::MANAGE_RECONCILIATION],
-            ['remittance-materials', '补件管理', 'remittance/materials', RemittancePermission::MANAGE_MATERIALS],
-            ['support-messages', '客服消息', 'support/messages', RemittancePermission::SUPPORT],
-            ['support-tickets', '客服工单', 'support/tickets', RemittancePermission::SUPPORT],
-            ['remittance-members', '会员中心', 'remittance/members', RemittancePermission::VIEW_MEMBERS],
-            ['remittance-closures', '注销申请', 'remittance/closures', RemittancePermission::MANAGE_CLOSURES],
-            ['remittance-push', 'Push 提醒', 'remittance/push', RemittancePermission::MANAGE_PUSH_PLANS],
-            ['remittance-coupons', '汇款优惠券', 'remittance/coupons', RemittancePermission::MANAGE_COUPONS],
-            ['remittance-staff', '员工角色', 'remittance/staff', PlatformRoles::MANAGE_ACCESS],
-            ['remittance-audit', '操作审计', 'remittance/audit', PlatformRoles::MANAGE_ACCESS],
-            ['remittance-status-reasons', '状态原因码', 'remittance/status-reasons', RemittancePermission::VIEW_STATUS_REASONS],
+        $groups = [
+            ['', '', [
+                ['remittance-dashboard', '经营仪表盘', 'remittance/dashboard', RemittancePermission::VIEW_ORDERS],
+            ]],
+            ['transfers', '汇款管理', [
+                ['remittance-orders', '汇款订单', 'remittance/orders', RemittancePermission::VIEW_ORDERS],
+                ['remittance-materials', '补件管理', 'remittance/materials', RemittancePermission::MANAGE_MATERIALS],
+            ]],
+            ['members', '用户与认证', [
+                ['remittance-members', '会员中心', 'remittance/members', RemittancePermission::VIEW_MEMBERS],
+                ['remittance-closures', '注销申请', 'remittance/closures', RemittancePermission::MANAGE_CLOSURES],
+            ]],
+            ['pricing', '报价与规则', [
+                ['remittance-rules', '付款与到账规则', 'remittance/rules', RemittancePermission::MANAGE_RULES],
+                ['remittance-quotes', '报价记录', 'remittance/quotes', RemittancePermission::MANAGE_RULES],
+            ]],
+            ['marketing', '营销与通知', [
+                ['remittance-coupons', '汇款优惠券', 'remittance/coupons', RemittancePermission::MANAGE_COUPONS],
+                ['remittance-push', 'Push 提醒', 'remittance/push', RemittancePermission::MANAGE_PUSH_PLANS],
+            ]],
+            ['support-finance', '客服与财务', [
+                ['support-messages', '客服消息', 'support/messages', RemittancePermission::SUPPORT],
+                ['support-tickets', '客服工单', 'support/tickets', RemittancePermission::SUPPORT],
+                ['remittance-status-reasons', '状态原因码', 'remittance/status-reasons', RemittancePermission::VIEW_STATUS_REASONS],
+                ['remittance-reconciliation', '对账与结算', 'remittance/reconciliation', RemittancePermission::MANAGE_RECONCILIATION],
+            ]],
+            ['system', '系统管理', [
+                ['remittance-operations', '运营配置', 'remittance/operations', RemittancePermission::MANAGE_RULES],
+                ['remittance-staff', '员工角色', 'remittance/staff', PlatformRoles::MANAGE_ACCESS],
+                ['remittance-audit', '操作审计', 'remittance/audit', PlatformRoles::MANAGE_ACCESS],
+            ]],
         ];
 
-        return $this->success(array_values(array_map(
-            static fn (array $menu) => [
-                'id' => $menu[0], 'name' => $menu[1], 'path' => '/system/'.$menu[2], 'component' => $menu[2],
-                'permission' => $menu[3], 'menuType' => 'MENU', 'visible' => true,
-            ],
-            array_filter($menus, static fn (array $menu) => PlatformRoles::allows($user, $token, $menu[3])),
-        )));
+        $menus = [];
+        foreach ($groups as [$groupId, $groupName, $entries]) {
+            $children = [];
+            foreach ($entries as [$id, $name, $component, $permission]) {
+                if (PlatformRoles::allows($user, $token, $permission)) {
+                    $children[] = [
+                        'id' => $id,
+                        'name' => $name,
+                        'path' => '/system/'.$component,
+                        'component' => $component,
+                        'permission' => $permission,
+                        'menuType' => 'MENU',
+                        'visible' => true,
+                    ];
+                }
+            }
+
+            if ($children === []) {
+                continue;
+            }
+
+            if ($groupId === '') {
+                $menus = [...$menus, ...$children];
+
+                continue;
+            }
+
+            $menus[] = [
+                'id' => 'remit-group-'.$groupId,
+                'name' => $groupName,
+                'path' => '/system/remit-menu/'.$groupId,
+                'menuType' => 'MENU',
+                'visible' => true,
+                'children' => $children,
+            ];
+        }
+
+        return $this->success($menus);
     }
 
     public function permissions(Request $request): JsonResponse

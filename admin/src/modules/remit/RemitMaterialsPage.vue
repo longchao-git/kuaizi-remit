@@ -3,7 +3,7 @@
     <h1>补件管理</h1>
     <div><el-button type="primary" @click="openForm">登记雅本补件</el-button></div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无补件任务'">
+    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无补件任务'">
       <el-table-column prop="member_id" label="会员编号" width="100" />
       <el-table-column prop="question_id" label="雅本问题编号" min-width="170" show-overflow-tooltip />
       <el-table-column prop="order_reference" label="订单编号" min-width="180" show-overflow-tooltip />

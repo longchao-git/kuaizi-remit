@@ -24,7 +24,7 @@
 
     <el-card shadow="never">
       <template #header>对账批次</template>
-      <el-table v-loading="loading" :data="batches" border empty-text="暂无对账批次" highlight-current-row row-key="id">
+      <el-table scrollbar-always-on v-loading="loading" :data="batches" border empty-text="暂无对账批次" highlight-current-row row-key="id">
         <el-table-column prop="id" label="批次号" width="78" />
         <el-table-column prop="settlement_date" label="结算日期" width="115" />
         <el-table-column prop="filename" label="导入文件" min-width="150" show-overflow-tooltip />
@@ -58,7 +58,7 @@
         </div>
       </template>
       <el-alert v-if="lineError" :title="lineError" type="error" :closable="false" />
-      <el-table v-loading="readingLines" :data="lines" border empty-text="暂无符合条件的明细">
+      <el-table scrollbar-always-on v-loading="readingLines" :data="lines" border empty-text="暂无符合条件的明细">
         <el-table-column prop="order_reference" label="订单号" min-width="180" show-overflow-tooltip />
         <el-table-column label="导入本金" width="112">
           <template #default="{ row }">{{ euro(row.imported_minor) }}</template>

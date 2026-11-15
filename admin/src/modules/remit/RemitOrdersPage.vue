@@ -10,7 +10,13 @@
       </el-form-item>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table :data="rows" :empty-text="error ? '读取失败' : '暂无汇款订单'" v-loading="busy && !syncing">
+    <el-table
+      v-loading="busy && !syncing"
+      :data="rows"
+      :empty-text="error ? '读取失败' : '暂无汇款订单'"
+      max-height="max(300px, calc(100vh - 250px))"
+      scrollbar-always-on
+    >
       <el-table-column prop="reference" label="订单编号" min-width="260" show-overflow-tooltip />
       <el-table-column prop="member_id" label="会员" width="80" />
       <el-table-column label="汇款本金" min-width="115">
@@ -141,5 +147,16 @@ onMounted(() => { void load(1) })
 
 .order-filters :deep(.el-form-item) {
   margin: 0;
+}
+
+.order-filters .el-button,
+.order-filters :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: var(--omc-control-height);
+}
+
+@media (max-width: 1150px) {
+  .order-filters { gap: 12px; }
+  .order-filters :deep(.el-input) { width: 174px; }
 }
 </style>

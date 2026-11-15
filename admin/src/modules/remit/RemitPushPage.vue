@@ -4,7 +4,7 @@
     <el-tabs v-model="tab" @tab-change="refresh">
       <el-tab-pane label="提醒计划" name="plans">
         <div class="toolbar"><el-button type="primary" @click="edit()">新增提醒计划</el-button></div>
-        <el-table v-loading="loading" :data="plans" border empty-text="暂无提醒计划">
+        <el-table scrollbar-always-on v-loading="loading" :data="plans" border empty-text="暂无提醒计划">
           <el-table-column prop="name" label="计划名称" min-width="150" show-overflow-tooltip />
           <el-table-column label="目标人群" min-width="175">
             <template #default>完成认证、尚未首汇</template>
@@ -33,7 +33,7 @@
           <el-button :disabled="loading" @click="refresh">刷新</el-button>
           <span v-if="filter">{{ filter.name }}</span>
         </div>
-        <el-table v-loading="loading" :data="records" border empty-text="暂无发送记录">
+        <el-table scrollbar-always-on v-loading="loading" :data="records" border empty-text="暂无发送记录">
           <el-table-column prop="plan_name" label="计划名称" min-width="130" show-overflow-tooltip />
           <el-table-column prop="member_id" label="会员编号" width="95" />
           <el-table-column prop="notice_id" label="站内消息编号" width="115" />

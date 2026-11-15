@@ -7,6 +7,7 @@
         :key="item.id || item.path || item.name"
         type="button"
         :class="['secondary-sidebar__item', { 'is-active': isActive(item) }]"
+        :aria-current="isActive(item) ? 'page' : undefined"
         @click="handleClick(item)"
       >
         {{ displayName(item) }}
@@ -42,10 +43,12 @@ const handleClick = (menu: MenuVO) => {
 
 <style scoped>
 .secondary-sidebar {
-  width: 120px;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   padding: 30px 12px 28px;
-  background: #fff;
+  background: var(--omc-color-surface);
+  border-inline-end: 1px solid var(--omc-color-border-light);
   overflow-y: auto;
 }
 
@@ -62,18 +65,18 @@ const handleClick = (menu: MenuVO) => {
   padding: 0 8px;
   font-size: 14px;
   line-height: 22px;
-  color: #999999;
+  color: var(--omc-color-text-secondary);
 }
 
 .secondary-sidebar__item {
-  width: 84px;
+  width: 100%;
   min-height: 30px;
   padding: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   border: 0;
-  border-radius: 2px;
+  border-radius: var(--omc-radius-sm);
   background: transparent;
   color: var(--omc-color-text);
   cursor: pointer;
@@ -90,6 +93,7 @@ const handleClick = (menu: MenuVO) => {
 
 .secondary-sidebar__item.is-active {
   background: var(--omc-color-primary-soft);
-  color: var(--omc-color-primary);
+  color: var(--omc-color-primary-active);
+  font-weight: 600;
 }
 </style>

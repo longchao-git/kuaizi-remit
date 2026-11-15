@@ -183,6 +183,18 @@
   background: #e2f7ec;
   color: #18704d;
 }
+.callout.warning {
+  background: #fff4eb;
+  border: 1rpx solid #ffdccb;
+  color: #965021;
+}
+.payment-option-total {
+  color: #5c6172;
+  font-size: 22rpx;
+}
+.payment-option-total.is-selected {
+  color: #18704d;
+}
 .pill.waiting,
 .tile-icon.waiting,
 .status-icon.waiting {

@@ -1,20 +1,29 @@
 <template>
   <div class="login-page">
-    <header class="login-page__brand">
-      <div class="login-page__brand-mark">
-        <img src="@/assets/icon/headerLogo.png" alt="logo" class="login-page__brand-logo" />
+    <aside class="login-intro">
+      <div class="login-brand">
+        <span class="login-brand__mark" aria-hidden="true">KZ</span>
+        <span>筷子闪汇</span>
       </div>
-      <div class="login-page__brand-title">后台管理系统</div>
-    </header>
+      <div class="login-intro__copy">
+        <p class="login-intro__title">让每一笔跨境汇款<br>清晰、可控、可追踪</p>
+        <p>在一个后台管理汇率、手续费、到账进度和客户服务。</p>
+      </div>
+    </aside>
 
     <main class="login-page__main">
       <section class="login-card" v-loading="loading" element-loading-text="正在登录...">
-        <div class="login-card__content">
-          <h1 class="login-card__title">欢迎登录</h1>
+        <form class="login-card__content" @submit.prevent="handleLogin">
+          <div class="login-brand login-brand--card">
+            <span class="login-brand__mark" aria-hidden="true">KZ</span>
+            <span>筷子闪汇</span>
+          </div>
+          <h1 class="login-card__title">欢迎回来</h1>
 
           <div class="login-card__field">
-            <label class="login-card__label">账号</label>
+            <label for="platform-login-username" class="login-card__label">后台账号</label>
             <el-input
+              id="platform-login-username"
               v-model="loginForm.username"
               class="login-card__input"
               placeholder="请输入账号"
@@ -23,15 +32,15 @@
           </div>
 
           <div class="login-card__field">
-            <label class="login-card__label">密码</label>
+            <label for="platform-login-password" class="login-card__label">密码</label>
             <el-input
+              id="platform-login-password"
               v-model="loginForm.password"
               class="login-card__input"
               type="password"
               show-password
               placeholder="请输入密码"
               autocomplete="current-password"
-              @keyup.enter="handleLogin"
             />
           </div>
 
@@ -39,17 +48,13 @@
             我已阅读并同意用户协议和隐私政策
           </el-checkbox>
 
-          <el-button type="primary" class="login-card__button" :loading="loading" @click="handleLogin">
+          <el-button native-type="submit" type="primary" class="login-card__button" :loading="loading">
             登录
           </el-button>
-        </div>
+        </form>
       </section>
     </main>
 
-    <footer class="login-page__footer">
-      <div>Copyright © 2026</div>
-      <div>后台管理系统</div>
-    </footer>
   </div>
 </template>
 
@@ -59,141 +64,162 @@ import { useLoginPage } from '../application/useLoginPage'
 const { loginForm, loading, agreedToTerms, handleLogin } = useLoginPage()
 </script>
 
-<style lang="scss">
-.login-card {
-  .el-input__wrapper {
-    min-height: 40px !important;
-    padding: 0 12px !important;
-    border-radius: 8px !important;
-    background: #fff !important;
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08) !important;
-    transition: box-shadow 0.2s ease;
-  }
-
-  .el-input__wrapper:hover,
-  .el-input__wrapper.is-focus {
-    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.36) !important;
-  }
-
-  .el-input__inner {
-    height: 48px;
-    font-size: 13px;
-    color: #1f2937;
-  }
-}
-</style>
-
 <style scoped lang="scss">
 .login-page {
+  display: grid;
   position: relative;
-  height: 100vh;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(243, 247, 255, 0.9)),
-    url('@/assets/icon/backImage.png') center/cover no-repeat;
+  grid-template-columns: minmax(290px, 48%) minmax(0, 1fr);
+  min-height: 100vh;
+  background: #fdfefe;
+  color: var(--omc-color-text);
 }
 
-.login-page::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(59, 130, 246, 0.12), transparent 28%),
-    radial-gradient(circle at 82% 20%, rgba(147, 197, 253, 0.18), transparent 32%),
-    radial-gradient(circle at 50% 100%, rgba(191, 219, 254, 0.2), transparent 34%);
-  pointer-events: none;
-}
-
-.login-page__brand,
-.login-page__main,
-.login-page__footer {
+.login-intro {
   position: relative;
-  z-index: 1;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(32px, 5vw, 76px);
+  background: var(--omc-color-sidebar-top);
+  color: #fff;
 }
 
-.login-page__brand {
+.login-intro::before,
+.login-intro::after {
+  position: absolute;
+  z-index: -1;
+  width: min(70vw, 710px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  content: '';
+}
+
+.login-intro::before {
+  top: -30%;
+  right: -38%;
+  background: #216970;
+}
+
+.login-intro::after {
+  bottom: -18%;
+  left: -8%;
+  background: #1a5063;
+}
+
+.login-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 24px 0 0 28px;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 17px;
 }
 
-.login-page__brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+.login-brand__mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  background: var(--omc-color-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.login-page__brand-logo {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-.login-page__brand-title {
+.login-intro__copy {
+  max-width: 440px;
+  margin-top: clamp(70px, 12vh, 125px);
+  color: #c8dbe4;
   font-size: 15px;
-  font-weight: 600;
-  color: #111827;
+  line-height: 1.7;
+}
+
+.login-intro__title {
+  margin: 0 0 18px;
+  color: #fff;
+  font-size: clamp(24px, 2vw, 34px);
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .login-page__main {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: calc(100vh - 72px);
-  padding: 20px 20px 72px;
-  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 32px clamp(24px, 5vw, 80px);
 }
 
 .login-card {
-  width: min(400px, calc(100vw - 32px));
+  box-sizing: border-box;
+  width: min(100%, 528px);
+  min-height: min(67vh, 670px);
+  border: 1px solid var(--omc-color-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(12px);
+  background: #fff;
 }
 
-.login-card__content { padding: 32px; }
-.login-card__title { margin: 0; font-size: 20px; font-weight: 600; color: #111827; }
-.login-card__field { margin-top: 24px; }
-.login-card__label { display: block; margin-bottom: 12px; font-size: 14px; color: #374151; }
+.login-card__content {
+  display: grid;
+  padding: clamp(26px, 3.3vw, 54px);
+}
+
+.login-brand--card {
+  color: #223b50;
+}
+
+.login-brand--card .login-brand__mark {
+  background: var(--omc-color-primary-soft);
+  color: var(--omc-color-primary);
+}
+
+.login-card__title {
+  margin: clamp(26px, 5vh, 60px) 0 10px;
+  color: #223b50;
+  font-size: 26px;
+}
+
+.login-card__field { margin-top: 22px; }
+.login-card__label { display: block; margin-bottom: 8px; color: #526779; font-size: 13px; }
 .login-card__input { width: 100%; }
-.login-card__agreement { margin-top: 18px; color: #64748b; }
+
+.login-card__input :deep(.el-input__wrapper) {
+  min-height: 46px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--omc-color-border) inset;
+}
+
+.login-card__input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--omc-color-primary) inset;
+}
+
+.login-card__agreement {
+  height: auto;
+  margin-top: 24px;
+  color: #526779;
+}
+
+.login-card__agreement :deep(.el-checkbox__label) {
+  white-space: normal;
+  line-height: 1.5;
+}
 
 .login-card__button {
   width: 100%;
-  height: 48px !important;
-  margin-top: 20px;
-  border-radius: 8px !important;
-  font-size: 14px;
+  height: 46px;
+  margin-top: 22px;
+  border-radius: 8px;
   font-weight: 600;
 }
 
-.login-page__footer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 72px;
-  padding: 12px 20px;
-  box-sizing: border-box;
-  font-size: 12px;
-  color: #94a3b8;
-  text-align: center;
-}
-
-@media (max-width: 520px) {
-  .login-page__brand { padding: 18px 0 0 18px; }
-  .login-card__content { padding: 28px 22px; }
+@media (max-width: 720px) {
+  .login-page { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .login-intro { overflow: hidden; padding: 20px 24px; }
+  .login-intro__copy { display: none; }
+  .login-page__main { padding: 24px 16px; }
+  .login-card { min-height: 0; }
+  .login-brand--card { display: none; }
+  .login-card__title { margin-top: 0; }
 }
 </style>

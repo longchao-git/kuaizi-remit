@@ -9,7 +9,7 @@
       <el-button :loading="loading" @click="load(page)">刷新</el-button>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无客服工单'">
+    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无客服工单'">
       <el-table-column prop="id" label="工单编号" width="100" />
       <el-table-column prop="member_id" label="会员编号" width="100" />
       <el-table-column prop="subject" label="标题" min-width="160" show-overflow-tooltip />

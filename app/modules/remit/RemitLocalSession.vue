@@ -1,15 +1,16 @@
 <template>
   <view class="remit" data-mode="local-session" :data-screen="chatOpen ? 36 : undefined">
-    <view class="top">
-      <button v-if="subPageOpen || (!member && !busy)" class="back-hit" role="button" tabindex="0" aria-label="返回" @tap="back">
+    <view v-if="!member || subPageOpen || profileOpen" class="top session-top">
+      <button v-if="showBack" class="back-hit" role="button" tabindex="0" aria-label="返回" @tap="back">
         <image class="round-icon" src="/static/remit/back.svg" mode="aspectFit" />
       </button>
       <text>{{ pageTitle }}</text>
-      <button v-if="member && !subPageOpen" class="top-action" :disabled="busy" @tap="logout">退出登录</button>
+      <button v-if="profileOpen && !subPageOpen" class="top-action" @tap="settingsOpen = true">设置</button>
     </view>
 
-    <RemitInbox v-if="inboxOpen" v-show="!ordersOpen" ref="inbox" :target-notice="targetNotice" @expired="expire"
+    <RemitInbox v-if="inboxOpen" v-show="!ordersOpen && !ticketsOpen" ref="inbox" :target-notice="targetNotice" @expired="expire"
       @unread="inboxCount = $event" @ticket="openTicket" @order="openNoticeOrder" />
+    <RemitHelp v-if="helpOpen" v-show="!chatOpen" @contact="chatOpen = true" />
 
     <view v-if="!member && props.allowLocalLogin" class="body auth">
       <text class="heading">测试账号登录</text>
@@ -32,32 +33,56 @@
       v-else-if="chatOpen" :live="live" :messages="messages" :sending="sending" :status="status"
       :send="send" @refresh="refresh()"
     />
-    <view v-else-if="member && !inboxOpen" class="home-content">
-      <view v-if="announcement" class="promotion payment-notice">{{ announcement }}</view>
-      <view class="line">
-        <text class="description">{{ member.userName }}</text>
-        <button class="inline-action accent" :disabled="busy" @tap="inboxOpen = true">
-          消息通知<text v-if="inboxCount" class="pill">{{ inboxCount }} 条未读</text>
+    <view v-else-if="settingsOpen" class="body account-content">
+      <text class="account-section-title">账户与安全</text>
+      <button class="card account-link" @tap="closureOpen = true">
+        <text>账号注销与记录</text>
+        <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
+      </button>
+      <text v-if="error" class="hint offer" role="alert">{{ error }}</text>
+      <button class="secondary account-logout" :disabled="busy" @tap="logout">退出登录</button>
+    </view>
+    <view v-else-if="profileOpen && member && !inboxOpen && !helpOpen" class="body account-content">
+      <view class="card account-identity">
+        <text class="account-avatar">{{ member.userName.slice(0, 1) || '会' }}</text>
+        <text class="account-name">{{ member.userName }}</text>
+      </view>
+      <view class="account-links">
+        <button v-for="link in accountLinks" :key="link.label" class="card account-link" @tap="link.open()">
+          <image class="account-icon" :src="link.icon" mode="aspectFit" />
+          <text class="account-link-text">{{ link.label }}</text>
+          <text v-if="link.badge" class="pill">{{ link.badge }}</text>
+          <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
         </button>
       </view>
-      <button class="inline-action accent" :disabled="busy" @tap="chatOpen = true">
-        联系客服<text v-if="unread" class="pill">{{ unread }} 条未读</text>
-      </button>
-      <button class="inline-action accent" :disabled="busy" @tap="couponsOpen = true">
-        {{ selectedCoupon ? `优惠券 · ${selectedCoupon.title}` : '我的优惠券' }}
-      </button>
-      <button class="inline-action accent" :disabled="busy" @tap="draftsOpen = true">汇款草稿</button>
-      <button class="inline-action accent" :disabled="busy" @tap="ordersOpen = true">汇款订单</button>
-      <button class="inline-action accent" :disabled="busy" @tap="ticketsOpen = true">客服工单</button>
-      <button class="inline-action accent" :disabled="busy" @tap="kycOpen = true">身份认证</button>
-      <button class="inline-action accent" :disabled="busy" @tap="materialsOpen = true">补充资料</button>
-      <button class="inline-action accent" :disabled="busy" @tap="closureOpen = true">账号注销与记录</button>
+    </view>
+    <view v-else-if="onHome" class="home-content session-home">
+      <view class="line home-head">
+        <view class="brand">
+          <view class="brand-tile"><image src="/static/remit/logo-home.svg" mode="aspectFit" /></view>
+          <view><text class="brand-name">筷子闪汇</text><text class="brand-en">KUAIZI REMIT</text></view>
+        </view>
+        <button class="support icon-control home-support" role="button" aria-label="帮助与客服" :disabled="busy" @tap="helpOpen = true">
+          <image src="/static/remit/support.svg" mode="aspectFit" />
+          <text v-if="unread" class="home-support-unread" :aria-label="`${unread} 条未读客服消息`" />
+        </button>
+      </view>
+      <view v-if="announcement" class="promotion payment-notice">{{ announcement }}</view>
       <view class="card quote-card">
         <view class="line quote-label"><text>汇款金额</text><text class="pill">EUR → CNY</text></view>
         <view class="currency">
-          <text>EUR</text>
+          <view class="flag eu"><image src="/static/remit/eu.png" mode="scaleToFill" /></view><text>EUR</text>
           <input v-model="amount" type="digit" maxlength="12" class="currency-amount" aria-label="联调汇款金额" />
         </view>
+        <template v-if="quote">
+          <view class="line quote-label"><text>预计到账</text><text class="muted">{{ quote.eta }}</text></view>
+          <view class="currency">
+            <image class="flag" src="/static/remit/china.svg" mode="aspectFit" /><text>CNY</text>
+            <text class="currency-amount accent" :class="{ 'wide-amount': formatAmount(quote.payout_minor).length >= 11 }">
+              {{ formatAmount(quote.payout_minor) }}
+            </text>
+          </view>
+        </template>
         <view class="line quote-label"><text>人民币到账方式</text></view>
         <view class="line">
           <button class="inline-action" :class="{ accent: payoutMethod === 'bank' }" @tap="payoutMethod = 'bank'">银行卡</button>
@@ -72,13 +97,11 @@
       </view>
 
       <view v-if="quote" class="quote-breakdown" aria-label="联调报价结果">
-        <view class="line"><text>预计到账</text><text>¥{{ formatAmount(quote.payout_minor) }}</text></view>
         <view class="line"><text>{{ quote.can_submit ? '锁定汇率' : '试算汇率' }}</text><text>{{ (quote.rate_ten_thousandths / 10000).toFixed(4) }}</text></view>
         <view class="line"><text>汇款手续费</text><text>€{{ formatAmount(quote.base_fee_minor) }}</text></view>
         <view v-if="quote.discount_minor" class="line"><text>优惠减免</text><text>−€{{ formatAmount(quote.discount_minor) }}</text></view>
         <view class="line"><text>通道费</text><text>€{{ formatAmount(quote.channel_fee_minor) }}</text></view>
         <view class="line"><text>合计支付</text><text>€{{ formatAmount(quote.total_payable_minor) }}</text></view>
-        <view class="line"><text>预计到账时间</text><text>{{ quote.eta }}</text></view>
         <view v-if="quote.payment_notice" class="promotion payment-notice">{{ quote.payment_notice }}</view>
         <view v-if="quote.record_no" class="line quote-reference">
           <text>{{ quote.can_submit ? '报价编号' : '试算编号' }}</text>
@@ -92,12 +115,33 @@
         <button v-else-if="quote.record_no" class="inline-action accent" :disabled="busy" @tap="saveDraft(quote.record_no)">保存为草稿</button>
       </view>
       <text v-if="quote?.mode === 'local_estimate'" class="description">试算报价不锁定汇率。</text>
+      <view class="line session-quote-links">
+        <button class="inline-action accent" :disabled="busy" @tap="couponsOpen = true">
+          {{ selectedCoupon ? `优惠券 · ${selectedCoupon.title}` : '我的优惠券' }}
+        </button>
+        <button class="inline-action accent" :disabled="busy" @tap="inboxOpen = true">
+          消息通知<text v-if="inboxCount" class="pill">{{ inboxCount }} 条未读</text>
+        </button>
+      </view>
     </view>
 
-    <view v-if="!subPageOpen" class="footer">
+    <view v-if="!member && props.allowLocalLogin" class="footer">
       <text v-if="error" class="hint offer" role="alert">{{ error }}</text>
-      <button v-if="!member && props.allowLocalLogin" class="primary" :disabled="busy" @tap="login">{{ busy ? '请稍候' : '登录' }}</button>
-      <button v-else-if="member" class="primary" :disabled="busy" @tap="estimate">{{ busy ? '请稍候' : '获取汇款报价' }}</button>
+      <button class="primary" :disabled="busy" @tap="login">{{ busy ? '请稍候' : '登录' }}</button>
+    </view>
+    <view v-if="showTabs" class="session-bottom">
+      <view v-if="onHome" class="footer quote-footer">
+        <text v-if="error" class="hint offer" role="alert">{{ error }}</text>
+        <button class="primary" :disabled="busy" @tap="estimate">{{ busy ? '请稍候' : '获取汇款报价' }}</button>
+      </view>
+      <view class="tabs" aria-label="主导航">
+        <button
+          v-for="tab in sessionTabs" :key="tab.key" class="tab" :class="{ active: activeTab === tab.key }"
+          :aria-current="activeTab === tab.key ? 'page' : undefined" :disabled="busy || claimingOffer" @tap="selectTab(tab.key)"
+        >
+          <image :src="tab.icon" mode="aspectFit" /><text>{{ tab.label }}</text>
+        </button>
+      </view>
     </view>
     <RemitCouponOffer
       v-if="homeOffer && onCouponHome && !busy"
@@ -119,6 +163,7 @@ import { sessionService } from '@/shared/session/application/SessionService';
 import { formatAmount } from './previewOrder';
 import RemitInbox from './RemitInbox.vue';
 import RemitSupportConversation from './RemitSupportConversation.vue';
+import RemitHelp from './RemitHelp.vue';
 import { useSupportChat } from './useSupportChat';
 import RemitCoupons from './RemitCoupons.vue';
 import RemitCouponOffer from './RemitCouponOffer.vue';
@@ -159,9 +204,12 @@ const busy = ref(false);
 const inboxOpen = ref(false);
 const targetNotice = ref<string>();
 const chatOpen = ref(false);
+const helpOpen = ref(false);
 const couponsOpen = ref(false);
 const draftsOpen = ref(false);
 const ordersOpen = ref(false);
+const profileOpen = ref(false);
+const settingsOpen = ref(false);
 const materialsOpen = ref(false);
 const closureOpen = ref(false);
 const orderDetail = ref(false);
@@ -187,13 +235,26 @@ let inboxRequest = 0;
 let announcementRequest = 0;
 
 const subPageOpen = computed(() =>
-  inboxOpen.value || chatOpen.value || couponsOpen.value || draftsOpen.value || ordersOpen.value || ticketsOpen.value ||
-  kycOpen.value || materialsOpen.value || closureOpen.value,
+  inboxOpen.value || chatOpen.value || helpOpen.value || couponsOpen.value || draftsOpen.value || ordersOpen.value || ticketsOpen.value ||
+  kycOpen.value || materialsOpen.value || closureOpen.value || settingsOpen.value,
 );
-const onCouponHome = computed(() => Boolean(member.value) && props.pageVisible && !subPageOpen.value);
+const onHome = computed(() => Boolean(member.value) && !subPageOpen.value && !profileOpen.value);
+const onCouponHome = computed(() => onHome.value && props.pageVisible);
+const onOrderTab = computed(() => ordersOpen.value && !ticketsOpen.value && !inboxOpen.value && !orderDetail.value);
+const showTabs = computed(() => Boolean(member.value) && (!subPageOpen.value || onOrderTab.value));
+const showBack = computed(() => (subPageOpen.value && !onOrderTab.value) || (!member.value && !busy.value));
+
+const sessionTabs = [
+  { key: 'home', label: '首页', icon: '/static/remit/tab-home.svg' },
+  { key: 'orders', label: '订单', icon: '/static/remit/tab-orders.svg' },
+  { key: 'profile', label: '我的', icon: '/static/remit/tab-profile.svg' },
+] as const;
+type SessionTab = (typeof sessionTabs)[number]['key'];
+const activeTab = computed<SessionTab>(() => ordersOpen.value ? 'orders' : profileOpen.value ? 'profile' : 'home');
 
 const pageTitle = computed(() => {
   if (chatOpen.value) return '筷子闪汇客服';
+  if (helpOpen.value) return '帮助与客服';
   if (couponsOpen.value) return '我的优惠券';
   if (draftsOpen.value) return '汇款草稿';
   if (ticketsOpen.value) return '客服工单';
@@ -202,6 +263,8 @@ const pageTitle = computed(() => {
   if (kycOpen.value) return '身份认证';
   if (materialsOpen.value) return '补充资料';
   if (closureOpen.value) return '账号注销';
+  if (settingsOpen.value) return '设置';
+  if (profileOpen.value) return '我的';
   return member.value ? '汇款报价' : props.allowLocalLogin ? '测试账号登录' : '获取会话';
 });
 const { live, messages, refresh, refreshView, send, sending, status, unread } = useSupportChat(
@@ -214,13 +277,34 @@ const { live, messages, refresh, refreshView, send, sending, status, unread } = 
   },
 );
 
+const accountLinks = computed(() => [
+  { label: '我的优惠券', icon: '/static/remit/gift.png', open: () => { couponsOpen.value = true; } },
+  { label: '汇款草稿', icon: '/static/remit/document.svg', open: () => { draftsOpen.value = true; } },
+  { label: '身份认证', icon: '/static/remit/identity.svg', open: () => { kycOpen.value = true; } },
+  { label: '补充资料', icon: '/static/remit/document.svg', open: () => { materialsOpen.value = true; } },
+  { label: '消息通知', icon: '/static/remit/mail.svg', open: () => { inboxOpen.value = true; }, badge: inboxCount.value || undefined },
+  { label: '帮助与客服', icon: '/static/remit/support.svg', open: () => { helpOpen.value = true; }, badge: unread.value || undefined },
+  { label: '客服工单', icon: '/static/remit/document.svg', open: () => { ticketsOpen.value = true; } },
+  { label: '账户安全', icon: '/static/remit/shield.svg', open: () => { settingsOpen.value = true; } },
+]);
+
 const emit = defineEmits<{ back: [] }>();
+
+function selectTab(tab: SessionTab) {
+  if (tab === activeTab.value) return;
+  profileOpen.value = tab === 'profile';
+  ordersOpen.value = tab === 'orders';
+  orderDetail.value = false;
+  returnOrder.value = undefined;
+}
 
 function back() {
   if (homeOffer.value && onCouponHome.value) {
     dismissHomeOffer();
   } else if (chatOpen.value) {
     chatOpen.value = false;
+  } else if (helpOpen.value) {
+    helpOpen.value = false;
   } else if (couponsOpen.value) {
     couponsOpen.value = false;
   } else if (draftsOpen.value) {
@@ -254,6 +338,11 @@ function back() {
     materialsOpen.value = false;
   } else if (closureOpen.value) {
     closureOpen.value = false;
+  } else if (settingsOpen.value) {
+    settingsOpen.value = false;
+    error.value = '';
+  } else if (profileOpen.value) {
+    profileOpen.value = false;
   } else if (!member.value && !busy.value) {
     emit('back');
   }
@@ -383,12 +472,11 @@ async function claimHomeOffer() {
 function selectCoupon(coupon: MemberCoupon | null) {
   selectedCoupon.value = coupon;
   couponsOpen.value = false;
+  profileOpen.value = false;
 }
 
 function openTicket(id: string) {
   noticeTicket.value = id;
-  targetNotice.value = undefined;
-  inboxOpen.value = false;
   ticketsOpen.value = true;
 }
 
@@ -430,9 +518,12 @@ function clearSession() {
   announcementRequest++;
   announcement.value = null;
   chatOpen.value = false;
+  helpOpen.value = false;
   couponsOpen.value = false;
   draftsOpen.value = false;
   ordersOpen.value = false;
+  profileOpen.value = false;
+  settingsOpen.value = false;
   materialsOpen.value = false;
   closureOpen.value = false;
   orderDetail.value = false;
@@ -553,6 +644,7 @@ function resumeDraft(draft: RemitDraft) {
   payoutMethod.value = draft.payout_method;
   selectedCoupon.value = null;
   draftsOpen.value = false;
+  profileOpen.value = false;
   void estimate();
 }
 
@@ -574,5 +666,112 @@ onMounted(() => {
 .quote-reference-value {
   display: block;
   overflow-wrap: anywhere;
+}
+.session-top {
+  flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1rpx solid #e7e7ef;
+}
+.session-home {
+  padding-top: 28rpx;
+}
+.home-support {
+  position: relative;
+}
+.home-support-unread {
+  position: absolute;
+  top: 2rpx;
+  right: 2rpx;
+  width: 14rpx;
+  height: 14rpx;
+  border: 3rpx solid #fff;
+  border-radius: 50%;
+  background: var(--remit-accent);
+}
+.session-quote-links {
+  padding: 14rpx 0 18rpx;
+}
+.account-content {
+  flex: 1;
+}
+.account-identity,
+.account-link {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  padding: 24rpx;
+  border-color: #e7e7ef;
+}
+.account-avatar,
+.account-icon {
+  flex-shrink: 0;
+  border-radius: 24rpx;
+  background: #eeebff;
+}
+.account-avatar {
+  display: grid;
+  place-items: center;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  font-size: 40rpx;
+}
+.account-name {
+  min-width: 0;
+  font-size: 34rpx;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.account-links {
+  display: grid;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+.account-link {
+  width: 100%;
+  min-height: 100rpx;
+  color: #242733;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+}
+.account-icon {
+  width: 36rpx;
+  height: 36rpx;
+  padding: 12rpx;
+}
+.account-link-text {
+  min-width: 0;
+}
+.account-link .chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.account-section-title {
+  display: block;
+  margin-bottom: 16rpx;
+  color: #6d7180;
+  font-size: 24rpx;
+}
+.account-logout {
+  width: 100%;
+  margin-top: 24rpx;
+  color: #b92e47;
+}
+.session-bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  margin-top: auto;
+  background: #fff;
+  border-top: 1rpx solid #e7e7ef;
+}
+.session-bottom .quote-footer {
+  padding-bottom: 16rpx;
+}
+.session-bottom .tabs {
+  border-top: 1rpx solid #e7e7ef;
 }
 </style>
