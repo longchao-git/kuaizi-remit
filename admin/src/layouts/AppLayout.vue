@@ -26,12 +26,17 @@
               <el-breadcrumb-item>跨境汇款</el-breadcrumb-item>
               <el-breadcrumb-item v-if="currentMenuChain.length > 1">{{ activePrimaryMenu?.name }}</el-breadcrumb-item>
               <el-breadcrumb-item>{{ currentPageTitle }}</el-breadcrumb-item>
+              <el-breadcrumb-item v-if="detailPageTitle">{{ detailPageTitle }}</el-breadcrumb-item>
             </el-breadcrumb>
           </div>
           <div class="page-header__right">
             <el-dropdown trigger="click" @command="onUserCommand">
               <button type="button" class="page-header__user-trigger">
-                <span class="page-header__user-name">{{ userDisplayName }}</span>
+                <span class="page-header__user-avatar" aria-hidden="true">{{ userDisplayName.slice(0, 2).toUpperCase() }}</span>
+                <span class="page-header__user-identity">
+                  <span class="page-header__user-name">{{ userDisplayName }}</span>
+                  <span v-if="username && username !== userDisplayName" class="page-header__user-account">{{ username }}</span>
+                </span>
                 <el-icon class="page-header__user-arrow"><ArrowDown /></el-icon>
               </button>
               <template #dropdown>
@@ -75,8 +80,8 @@ const router = useRouter()
 const userStore = useUserStore()
 const sessionService = useSessionService()
 
-const username = computed(() => userStore.profile?.username || userStore.profile?.nickname || '')
-const userDisplayName = computed(() => username.value || '未登录')
+const username = computed(() => userStore.profile?.username || '')
+const userDisplayName = computed(() => userStore.profile?.nickname || username.value || '未登录')
 const primaryMenus = computed(() => getPrimaryMenus(userStore.menus))
 const activePrimaryMenu = computed(() => getActivePrimaryMenu(userStore.menus, route.path))
 const activePrimaryPath = computed(() => String(activePrimaryMenu.value?.path || ''))
@@ -84,6 +89,11 @@ const activeMenuPath = computed(() => resolveLayoutActivePath(userStore.menus, r
 const exactMenuChain = computed(() => findMenuChainByPath(userStore.menus, route.path))
 const currentMenuChain = computed(() => resolveMenuChainForRoute(userStore.menus, route.path))
 const currentPageTitle = computed(() => resolveCurrentPageTitle(userStore.menus, route.path) || '管理后台')
+const detailPageTitle = computed(() => {
+  if (route.path === '/system/remittance/orders' && route.query.order) return '订单详情'
+  if (route.path === '/system/remittance/members' && route.query.member) return '会员详情'
+  return ''
+})
 const showBackButton = computed(() => exactMenuChain.value.length === 0 && currentMenuChain.value.length > 0)
 const routePageTitle = computed(() => String(route.meta?.title || '').trim())
 const superiorTitle = computed(() => (showBackButton.value ? currentPageTitle.value : ''))
@@ -209,25 +219,55 @@ const onUserCommand = async () => {
 }
 
 .page-header__user-trigger {
-  padding: 10px 20px;
+  padding: 5px 10px;
   min-height: 36px;
   max-width: 24vw;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 999px;
+  gap: 8px;
+  border-radius: 8px;
   background: var(--omc-color-surface);
   color: var(--omc-color-text-secondary);
-  border: 1px solid var(--omc-color-border-light);
+  border: 1px solid transparent;
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
 }
 
-.page-header__user-name {
+.page-header__user-trigger:hover,
+.page-header__user-trigger:focus-visible {
+  border-color: var(--omc-color-border-light);
+  background: var(--omc-color-surface-soft);
+}
+
+.page-header__user-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--omc-color-primary-soft);
+  color: var(--omc-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.page-header__user-identity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  text-align: start;
+}
+
+.page-header__user-name,
+.page-header__user-account {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.page-header__user-name { color: var(--omc-color-text); font-weight: 600; }
+.page-header__user-account { color: var(--omc-color-text-secondary); font-size: 11px; }
 
 .page-header__user-arrow {
   flex: 0 0 auto;
@@ -236,10 +276,16 @@ const onUserCommand = async () => {
 }
 
 .main {
-  padding: 24px clamp(16px, 2.4vw, 38px);
+  padding: 28px clamp(16px, 2.4vw, 38px);
   background: transparent;
   flex: 0 0 auto;
   overflow: visible;
+}
+
+.main :deep(h1) {
+  color: var(--omc-color-text);
+  font-size: 24px;
+  line-height: 1.35;
 }
 
 @media (max-width: 1100px) {

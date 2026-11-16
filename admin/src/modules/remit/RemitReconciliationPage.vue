@@ -22,7 +22,7 @@
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
 
-    <el-card shadow="never">
+    <el-card class="remit-card" shadow="never">
       <template #header>对账批次</template>
       <el-table scrollbar-always-on v-loading="loading" :data="batches" border empty-text="暂无对账批次" highlight-current-row row-key="id">
         <el-table-column prop="id" label="批次号" width="78" />
@@ -45,7 +45,7 @@
       />
     </el-card>
 
-    <el-card v-if="selectedBatch" shadow="never">
+    <el-card v-if="selectedBatch" class="remit-card" shadow="never">
       <template #header>
         <div class="toolbar">
           <h2>批次 #{{ selectedBatch }} 明细</h2>
@@ -331,7 +331,7 @@ onMounted(() => void loadBatches(1))
 </script>
 
 <style scoped>
-.reconciliation-page { display: grid; min-width: 0; gap: 16px; padding: 24px; }
+.reconciliation-page { display: grid; min-width: 0; gap: 16px; }
 .toolbar, .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; }
 .toolbar h1, .toolbar h2 { margin: 0 auto 0 0; }
 .toolbar h1 { font-size: 24px; }

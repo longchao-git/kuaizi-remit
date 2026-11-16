@@ -32,7 +32,7 @@
       </el-form-item>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-card shadow="never" class="order-list">
+    <el-card shadow="never" class="order-list remit-card">
       <template #header><h2>记录列表</h2></template>
       <el-table
         v-loading="busy && !syncing"
@@ -98,9 +98,9 @@
     <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
     <div v-loading="detailLoading" class="order-detail-content">
       <div v-if="detail" class="order-detail-grid">
-        <el-card shadow="never" class="order-list">
+        <el-card shadow="never" class="order-list remit-card">
           <template #header><h2>订单摘要</h2></template>
-          <el-descriptions :column="1" size="small" border>
+          <el-descriptions class="remit-details" :column="1" size="small" border>
             <el-descriptions-item label="订单号">{{ detail.reference }}</el-descriptions-item>
             <el-descriptions-item label="会员编号">{{ detail.member_id }}</el-descriptions-item>
             <el-descriptions-item label="雅本交易号">{{ detail.trade_id || '—' }}</el-descriptions-item>
@@ -117,7 +117,7 @@
             <el-descriptions-item label="预计到账时间">{{ detail.quote?.eta || '—' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
-        <el-card shadow="never" class="order-list order-timeline">
+        <el-card shadow="never" class="order-list order-timeline remit-card">
           <template #header><h2>订单时间线（马德里）</h2></template>
           <el-timeline>
             <el-timeline-item :timestamp="dateTime.format(new Date(detail.created_at))">订单创建</el-timeline-item>
@@ -126,9 +126,9 @@
             </el-timeline-item>
           </el-timeline>
         </el-card>
-        <el-card shadow="never" class="order-list order-fees">
+        <el-card shadow="never" class="order-list order-fees remit-card">
           <template #header><h2>费用与定价明细</h2></template>
-          <el-descriptions :column="1" size="small" border>
+          <el-descriptions class="remit-details" :column="1" size="small" border>
             <el-descriptions-item label="成交汇率">
               {{ typeof detail.quote?.rate_ten_thousandths === 'number' ? (detail.quote.rate_ten_thousandths / 10000).toFixed(4) : '—' }}
             </el-descriptions-item>

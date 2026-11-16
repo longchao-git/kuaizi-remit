@@ -8,33 +8,36 @@
       <el-button :disabled="loading" @click="reset">重置</el-button>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无报价记录'">
-      <el-table-column type="expand">
-        <template #default="{ row }">
-          <el-descriptions :column="2" border class="snapshot">
-            <el-descriptions-item label="付款渠道">{{ fundingLabels[row.payment_method] }}</el-descriptions-item>
-            <el-descriptions-item label="收款渠道">{{ payoutLabels[row.payout_method] }}</el-descriptions-item>
-            <el-descriptions-item label="基础手续费">{{ euro(row.base_fee_minor) }}</el-descriptions-item>
-            <el-descriptions-item label="优惠减免">{{ euro(row.discount_minor) }}</el-descriptions-item>
-            <el-descriptions-item label="通道费">{{ euro(row.channel_fee_minor) }}（{{ row.channel_fee_basis_points / 100 }}%）</el-descriptions-item>
-            <el-descriptions-item label="预计支付">{{ euro(row.total_payable_minor) }}</el-descriptions-item>
-            <el-descriptions-item label="预计到账时间">{{ row.eta }}</el-descriptions-item>
-            <el-descriptions-item label="付款提示">{{ row.payment_notice || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="参考汇率">{{ row.source_rate_ten_thousandths == null ? '—' : (row.source_rate_ten_thousandths / 10000).toFixed(4) }}</el-descriptions-item>
-            <el-descriptions-item label="点差">{{ row.spread_basis_points == null ? '—' : row.spread_basis_points / 100 + '%' }}</el-descriptions-item>
-          </el-descriptions>
-          <el-button class="margin-action" type="primary" link @click="openMargin(row.record_no)">预估毛利</el-button>
-        </template>
-      </el-table-column>
-      <el-table-column prop="record_no" label="试算编号" min-width="270" show-overflow-tooltip />
-      <el-table-column prop="member_id" label="会员" width="85" />
-      <el-table-column label="金额" min-width="120"><template #default="{ row }">{{ euro(row.principal_minor) }}</template></el-table-column>
-      <el-table-column label="预计到账" min-width="120"><template #default="{ row }">{{ yuan.format(row.payout_minor / 100) }}</template></el-table-column>
-      <el-table-column label="试算汇率" min-width="100"><template #default="{ row }">{{ (row.rate_ten_thousandths / 10000).toFixed(4) }}</template></el-table-column>
-      <el-table-column label="规则版本" min-width="100"><template #default="{ row }">{{ row.rule_revision_id ?? '—' }}</template></el-table-column>
-      <el-table-column label="试算时间" min-width="175"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column>
-    </el-table>
-    <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading" layout="prev, pager, next" @current-change="load" />
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>报价与规则命中记录</h2></template>
+      <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无报价记录'">
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <el-descriptions :column="2" border class="snapshot">
+              <el-descriptions-item label="付款渠道">{{ fundingLabels[row.payment_method] }}</el-descriptions-item>
+              <el-descriptions-item label="收款渠道">{{ payoutLabels[row.payout_method] }}</el-descriptions-item>
+              <el-descriptions-item label="基础手续费">{{ euro(row.base_fee_minor) }}</el-descriptions-item>
+              <el-descriptions-item label="优惠减免">{{ euro(row.discount_minor) }}</el-descriptions-item>
+              <el-descriptions-item label="通道费">{{ euro(row.channel_fee_minor) }}（{{ row.channel_fee_basis_points / 100 }}%）</el-descriptions-item>
+              <el-descriptions-item label="预计支付">{{ euro(row.total_payable_minor) }}</el-descriptions-item>
+              <el-descriptions-item label="预计到账时间">{{ row.eta }}</el-descriptions-item>
+              <el-descriptions-item label="付款提示">{{ row.payment_notice || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="参考汇率">{{ row.source_rate_ten_thousandths == null ? '—' : (row.source_rate_ten_thousandths / 10000).toFixed(4) }}</el-descriptions-item>
+              <el-descriptions-item label="点差">{{ row.spread_basis_points == null ? '—' : row.spread_basis_points / 100 + '%' }}</el-descriptions-item>
+            </el-descriptions>
+            <el-button class="margin-action" type="primary" link @click="openMargin(row.record_no)">预估毛利</el-button>
+          </template>
+        </el-table-column>
+        <el-table-column prop="record_no" label="试算编号" min-width="270" show-overflow-tooltip />
+        <el-table-column prop="member_id" label="会员" width="85" />
+        <el-table-column label="金额" min-width="120"><template #default="{ row }">{{ euro(row.principal_minor) }}</template></el-table-column>
+        <el-table-column label="预计到账" min-width="120"><template #default="{ row }">{{ yuan.format(row.payout_minor / 100) }}</template></el-table-column>
+        <el-table-column label="试算汇率" min-width="100"><template #default="{ row }">{{ (row.rate_ten_thousandths / 10000).toFixed(4) }}</template></el-table-column>
+        <el-table-column label="规则版本" min-width="100"><template #default="{ row }">{{ row.rule_revision_id ?? '—' }}</template></el-table-column>
+        <el-table-column label="试算时间" min-width="175"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column>
+      </el-table>
+      <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading" layout="prev, pager, next" @current-change="load" />
+    </el-card>
     <el-dialog v-model="marginOpen" title="毛利预估" width="min(500px, 94vw)" :before-close="closeMargin">
       <el-form label-position="top" @submit.prevent="calculateMargin">
         <el-form-item label="试算编号">
@@ -172,7 +175,7 @@ onMounted(() => void load(1))
 </script>
 
 <style scoped>
-.records-page { display: grid; gap: 16px; padding: 24px 28px; }
+.records-page { display: grid; gap: 16px; }
 .records-page h1 { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .filters :deep(.el-form-item), .filters .el-button { margin: 0; }

@@ -1,10 +1,12 @@
 <template>
   <RemitRulesPreview connected @saved="reloadAfterSave" />
-  <section class="rule-history">
-    <header>
-      <h2>规则保存记录</h2>
-      <el-button :loading="loading" @click="load(1)">刷新</el-button>
-    </header>
+  <el-card class="rule-history remit-card" shadow="never">
+    <template #header>
+      <header>
+        <h2>规则保存记录</h2>
+        <el-button :loading="loading" @click="load(1)">刷新</el-button>
+      </header>
+    </template>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-table v-loading="loading" :data="items" :empty-text="error ? '读取失败' : '暂无保存记录'">
       <el-table-column type="expand">
@@ -42,7 +44,7 @@
       v-if="total > pageSize" :current-page="page" :page-size="pageSize" :total="total"
       :disabled="loading" layout="prev, pager, next" @current-change="load"
     />
-  </section>
+  </el-card>
 </template>
 
 <script setup lang="ts">
@@ -92,9 +94,8 @@ onMounted(() => void load(1))
 </script>
 
 <style scoped>
-.rule-history { display: grid; gap: 12px; }
 .rule-history header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.rule-history h2 { margin: 0; font-size: 18px; }
+.rule-history .el-alert { margin-bottom: 12px; }
 .snapshot { padding: 8px 24px; overflow-wrap: anywhere; }
 .snapshot-band { display: block; padding-left: 16px; }
 </style>

@@ -6,22 +6,25 @@
       <el-option v-for="(label, value) in auditActions" :key="value" :label="label" :value="value" />
     </el-select>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="records" :empty-text="error ? '读取失败' : '暂无操作记录'">
-      <el-table-column label="操作" min-width="140">
-        <template #default="{ row }">{{ auditActions[row.action as AuditAction] }}</template>
-      </el-table-column>
-      <el-table-column label="操作人" min-width="150">
-        <template #default="{ row }">{{ row.operator_name ?? '—' }}<span v-if="row.operator_id"> · {{ row.operator_id }}</span></template>
-      </el-table-column>
-      <el-table-column prop="reference_id" label="记录编号" min-width="120" />
-      <el-table-column label="时间" min-width="180">
-        <template #default="{ row }">{{ new Date(row.occurred_at).toLocaleString() }}</template>
-      </el-table-column>
-    </el-table>
-    <el-pagination
-      v-if="total > 20" :current-page="page" :disabled="loading" :page-size="20" :total="total"
-      layout="prev, pager, next" @current-change="load"
-    />
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>审计记录</h2></template>
+      <el-table v-loading="loading" :data="records" :empty-text="error ? '读取失败' : '暂无操作记录'">
+        <el-table-column label="操作" min-width="140">
+          <template #default="{ row }">{{ auditActions[row.action as AuditAction] }}</template>
+        </el-table-column>
+        <el-table-column label="操作人" min-width="150">
+          <template #default="{ row }">{{ row.operator_name ?? '—' }}<span v-if="row.operator_id"> · {{ row.operator_id }}</span></template>
+        </el-table-column>
+        <el-table-column prop="reference_id" label="记录编号" min-width="120" />
+        <el-table-column label="时间" min-width="180">
+          <template #default="{ row }">{{ new Date(row.occurred_at).toLocaleString() }}</template>
+        </el-table-column>
+      </el-table>
+      <el-pagination
+        v-if="total > 20" :current-page="page" :disabled="loading" :page-size="20" :total="total"
+        layout="prev, pager, next" @current-change="load"
+      />
+    </el-card>
   </section>
 </template>
 
@@ -80,7 +83,7 @@ onMounted(() => void load(1))
 </script>
 
 <style scoped>
-.audit-page { display: grid; gap: 16px; padding: 24px 28px; }
+.audit-page { display: grid; gap: 16px; }
 .audit-page h1 { margin: 0; }
 .audit-page .el-select { width: min(220px, 100%); }
 </style>

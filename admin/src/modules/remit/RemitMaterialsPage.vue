@@ -1,23 +1,28 @@
 <template>
   <section class="materials-page">
-    <h1>补件管理</h1>
-    <div><el-button type="primary" @click="openForm">登记雅本补件</el-button></div>
+    <header class="materials-header">
+      <h1>补件管理</h1>
+      <el-button type="primary" @click="openForm">登记雅本补件</el-button>
+    </header>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无补件任务'">
-      <el-table-column prop="member_id" label="会员编号" width="100" />
-      <el-table-column prop="question_id" label="雅本问题编号" min-width="170" show-overflow-tooltip />
-      <el-table-column prop="order_reference" label="订单编号" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="instruction" label="补件要求" min-width="150" show-overflow-tooltip />
-      <el-table-column label="截止时间" min-width="165">
-        <template #default="{ row }">{{ new Date(row.deadline_at).toLocaleString() }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="98">
-        <template #default="{ row }">{{ labels[row.status as keyof typeof labels] }}</template>
-      </el-table-column>
-    </el-table>
-    <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
-      layout="prev, pager, next" @current-change="load"
-    />
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>补件任务</h2></template>
+      <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无补件任务'">
+        <el-table-column prop="member_id" label="会员编号" width="100" />
+        <el-table-column prop="question_id" label="雅本问题编号" min-width="170" show-overflow-tooltip />
+        <el-table-column prop="order_reference" label="订单编号" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="instruction" label="补件要求" min-width="150" show-overflow-tooltip />
+        <el-table-column label="截止时间" min-width="165">
+          <template #default="{ row }">{{ new Date(row.deadline_at).toLocaleString() }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="98">
+          <template #default="{ row }">{{ labels[row.status as keyof typeof labels] }}</template>
+        </el-table-column>
+      </el-table>
+      <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
+        layout="prev, pager, next" @current-change="load"
+      />
+    </el-card>
     <el-dialog v-model="dialogOpen" title="登记雅本补件" width="min(560px, 94vw)" :closable="!saving" :close-on-click-modal="!saving">
       <el-form label-position="top" @submit.prevent="submit">
         <el-form-item label="会员编号"><el-input v-model.trim="form.memberId" maxlength="18" :disabled="saving" /></el-form-item>
@@ -112,5 +117,6 @@ onMounted(() => { void load(1) })
 <style scoped>
 .materials-page { display: grid; gap: 16px; }
 .materials-page h1 { margin: 0; }
+.materials-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .el-alert + .el-button { margin-top: 12px; }
 </style>

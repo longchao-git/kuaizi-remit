@@ -9,9 +9,9 @@
     <router-link v-if="!settings && !loading" to="/system/remittance/rules">前往付款与到账规则</router-link>
     <template v-if="settings">
       <div class="configuration-grid">
-        <el-card shadow="never">
-          <template #header>市场与 App 展示</template>
-          <el-descriptions :column="1" border>
+        <el-card class="remit-card" shadow="never">
+          <template #header><h2>市场与 App 展示</h2></template>
+          <el-descriptions class="remit-details" :column="1" border>
             <el-descriptions-item label="首发市场">西班牙</el-descriptions-item>
             <el-descriptions-item label="预计到账">按金额与人民币收款渠道匹配</el-descriptions-item>
           </el-descriptions>
@@ -31,8 +31,8 @@
           </div>
         </el-card>
 
-        <el-card shadow="never">
-          <template #header>付款提示</template>
+        <el-card class="remit-card" shadow="never">
+          <template #header><h2>付款提示</h2></template>
           <el-form label-position="top" @submit.prevent="save">
             <el-form-item label="付款渠道">
               <el-select v-model="channel" :disabled="saving">
@@ -163,7 +163,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.operations-page { display: grid; gap: 16px; padding: 24px; }
+.operations-page { display: grid; gap: 16px; }
 .toolbar, .related { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .toolbar h1 { margin: 0 auto 0 0; font-size: 24px; }
 .toolbar :deep(.el-button + .el-button) { margin: 0; }

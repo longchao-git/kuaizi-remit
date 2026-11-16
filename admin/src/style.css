@@ -412,6 +412,49 @@ input[type='number'] {
     background: var(--omc-color-primary-soft);
 }
 
+.remit-card.el-card {
+    --el-card-padding: 16px;
+    min-width: 0;
+}
+
+.remit-card > .el-card__header {
+    padding: 16px 16px 0;
+    border-bottom: 0;
+}
+
+.remit-card > .el-card__header h2,
+.remit-card > .el-card__header h3 {
+    margin: 0;
+    color: var(--omc-color-text);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.remit-card > .el-card__body > .el-pagination {
+    margin-top: 12px;
+}
+
+.remit-details .el-descriptions__cell.is-bordered-label,
+.remit-details .el-descriptions__cell.is-bordered-content {
+    padding: 9px 0;
+    border: 0;
+    border-bottom: 1px solid var(--omc-color-border-light);
+    background: var(--omc-color-surface);
+}
+
+.remit-details .el-descriptions__cell.is-bordered-label {
+    color: var(--omc-color-text-secondary);
+    font-weight: 400;
+}
+
+.remit-details .el-descriptions__cell.is-bordered-content {
+    padding-inline-start: 12px;
+    color: var(--omc-color-text);
+    font-weight: 500;
+    text-align: end;
+    overflow-wrap: anywhere;
+}
+
 .search {
     padding: 20px;
     background: var(--omc-color-surface-soft);

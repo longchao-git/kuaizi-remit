@@ -1,57 +1,59 @@
 <template>
   <section class="push-page">
     <h1>Push 提醒</h1>
-    <el-tabs v-model="tab" @tab-change="refresh">
-      <el-tab-pane label="提醒计划" name="plans">
-        <div class="toolbar"><el-button type="primary" @click="edit()">新增提醒计划</el-button></div>
-        <el-table scrollbar-always-on v-loading="loading" :data="plans" border empty-text="暂无提醒计划">
-          <el-table-column prop="name" label="计划名称" min-width="150" show-overflow-tooltip />
-          <el-table-column label="目标人群" min-width="175">
-            <template #default>完成认证、尚未首汇</template>
-          </el-table-column>
-          <el-table-column label="发送时间" min-width="180">
-            <template #default="{ row }">{{ row.send_time }} · {{ row.timezone }}</template>
-          </el-table-column>
-          <el-table-column prop="title" label="站内通知标题" min-width="140" show-overflow-tooltip />
-          <el-table-column label="状态" width="90">
-            <template #default="{ row }">{{ planLabel(row.status) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
-            <template #default="{ row }">
-              <el-button v-if="row.status !== 'active'" link type="primary" @click="edit(row)">编辑</el-button>
-              <el-button link type="primary" :disabled="changing" @click="changeStatus(row)">
-                {{ row.status === 'active' ? '暂停' : '启用' }}
-              </el-button>
-              <el-button link type="primary" @click="showRecords(row)">发送记录</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-      <el-tab-pane label="发送记录" name="records">
-        <div class="toolbar">
-          <el-button v-if="filter" :disabled="loading" @click="clearFilter">查看全部计划</el-button>
-          <el-button :disabled="loading" @click="refresh">刷新</el-button>
-          <span v-if="filter">{{ filter.name }}</span>
-        </div>
-        <el-table scrollbar-always-on v-loading="loading" :data="records" border empty-text="暂无发送记录">
-          <el-table-column prop="plan_name" label="计划名称" min-width="130" show-overflow-tooltip />
-          <el-table-column prop="member_id" label="会员编号" width="95" />
-          <el-table-column prop="notice_id" label="站内消息编号" width="115" />
-          <el-table-column prop="title" label="消息标题" min-width="160" show-overflow-tooltip />
-          <el-table-column label="系统推送" min-width="210">
-            <template #default="{ row }">{{ deliveryLabel(row) }}</template>
-          </el-table-column>
-          <el-table-column label="站内发送时间" width="180">
-            <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-    </el-tabs>
-    <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-pagination
-      v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
-      layout="prev, pager, next" @current-change="load"
-    />
+    <el-card class="remit-card" shadow="never">
+      <el-tabs v-model="tab" @tab-change="refresh">
+        <el-tab-pane label="提醒计划" name="plans">
+          <div class="toolbar"><el-button type="primary" @click="edit()">新增提醒计划</el-button></div>
+          <el-table scrollbar-always-on v-loading="loading" :data="plans" border empty-text="暂无提醒计划">
+            <el-table-column prop="name" label="计划名称" min-width="150" show-overflow-tooltip />
+            <el-table-column label="目标人群" min-width="175">
+              <template #default>完成认证、尚未首汇</template>
+            </el-table-column>
+            <el-table-column label="发送时间" min-width="180">
+              <template #default="{ row }">{{ row.send_time }} · {{ row.timezone }}</template>
+            </el-table-column>
+            <el-table-column prop="title" label="站内通知标题" min-width="140" show-overflow-tooltip />
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">{{ planLabel(row.status) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="row.status !== 'active'" link type="primary" @click="edit(row)">编辑</el-button>
+                <el-button link type="primary" :disabled="changing" @click="changeStatus(row)">
+                  {{ row.status === 'active' ? '暂停' : '启用' }}
+                </el-button>
+                <el-button link type="primary" @click="showRecords(row)">发送记录</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="发送记录" name="records">
+          <div class="toolbar">
+            <el-button v-if="filter" :disabled="loading" @click="clearFilter">查看全部计划</el-button>
+            <el-button :disabled="loading" @click="refresh">刷新</el-button>
+            <span v-if="filter">{{ filter.name }}</span>
+          </div>
+          <el-table scrollbar-always-on v-loading="loading" :data="records" border empty-text="暂无发送记录">
+            <el-table-column prop="plan_name" label="计划名称" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="member_id" label="会员编号" width="95" />
+            <el-table-column prop="notice_id" label="站内消息编号" width="115" />
+            <el-table-column prop="title" label="消息标题" min-width="160" show-overflow-tooltip />
+            <el-table-column label="系统推送" min-width="210">
+              <template #default="{ row }">{{ deliveryLabel(row) }}</template>
+            </el-table-column>
+            <el-table-column label="站内发送时间" width="180">
+              <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+      <el-alert v-if="error" :title="error" type="error" :closable="false" />
+      <el-pagination
+        v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
+        layout="prev, pager, next" @current-change="load"
+      />
+    </el-card>
     <el-dialog v-model="editorOpen" :title="selected ? '编辑提醒计划' : '新增提醒计划'" width="min(520px, 92vw)" :close-on-click-modal="false">
       <el-form label-position="top" @submit.prevent="save">
         <el-form-item label="计划名称" required><el-input v-model="draft.name" maxlength="80" /></el-form-item>
@@ -232,8 +234,8 @@ onMounted(refresh)
 </script>
 
 <style scoped>
-.push-page { padding: 24px; }
-h1 { margin: 0 0 20px; font-size: 24px; }
+.push-page { display: grid; gap: 16px; }
+h1 { margin: 0; }
 .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .toolbar :deep(.el-button + .el-button), .dialog-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .schedule { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

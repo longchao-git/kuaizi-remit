@@ -1,55 +1,78 @@
 <template>
   <section class="support-page">
-    <h1>客服消息</h1>
-    <div class="conversation-toolbar">
-      <el-checkbox v-model="unreadOnly" @change="loadConversations(1)">仅看未读</el-checkbox>
-      <el-button :loading="listing" @click="reloadConversations()">刷新会话</el-button>
+    <h1>客服工作台</h1>
+    <div class="support-workspace">
+      <el-card class="conversation-panel remit-card" shadow="never">
+        <template #header><h2>会话列表</h2></template>
+        <div class="conversation-toolbar">
+          <el-checkbox v-model="unreadOnly" @change="loadConversations(1)">仅看未读</el-checkbox>
+          <el-button :loading="listing" @click="reloadConversations()">刷新会话</el-button>
+        </div>
+        <el-alert v-if="listError" :title="listError" type="error" :closable="false" />
+        <div v-loading="listing" class="conversation-content">
+          <ul v-if="conversations.length" class="conversation-list">
+            <li v-for="item in conversations" :key="item.member_id">
+              <button type="button" class="conversation"
+                :class="{ 'is-current': item.member_id === memberId }"
+                :aria-current="item.member_id === memberId ? 'true' : undefined"
+                :aria-label="`打开会话 · ${item.member_name} · 会员 ${item.member_id}`"
+                @click="selectConversation(item.member_id)">
+                <span class="conversation-avatar" aria-hidden="true">{{ item.member_name.slice(0, 1) || '会' }}</span>
+                <span class="conversation-summary">
+                  <strong>{{ item.member_name }} · {{ item.member_id }}</strong>
+                  <span class="conversation-excerpt" :title="item.last_message.body">{{ item.last_message.body }}</span>
+                </span>
+                <el-tag v-if="item.unread_count" size="small" type="warning">{{ item.unread_count }} 未读</el-tag>
+                <span v-else class="conversation-read">已读</span>
+              </button>
+            </li>
+          </ul>
+          <el-empty v-else-if="!listError && !listing" description="暂无会话" :image-size="64" />
+        </div>
+        <el-pagination
+          v-if="total > 20" :current-page="page" :page-size="20" :total="total" :pager-count="5"
+          layout="prev, pager, next" @current-change="loadConversations"
+        />
+        <el-form inline class="member-lookup" @submit.prevent="openConversation">
+          <el-form-item label="会员编号">
+            <el-input v-model.trim="memberInput" placeholder="输入会员编号" />
+          </el-form-item>
+          <el-button type="primary" native-type="submit" :disabled="!validMember">查看会话</el-button>
+        </el-form>
+      </el-card>
+
+      <el-card class="chat-panel remit-card" shadow="never">
+        <template #header>
+          <div class="chat-header">
+            <div>
+              <h2>会话详情</h2>
+              <p v-if="memberId" class="chat-meta">
+                {{ activeConversation?.member_name || '会员' }} · {{ memberId }} · {{ live ? '实时更新' : '可手动刷新' }}
+              </p>
+            </div>
+            <el-button v-if="memberId" :loading="loading" @click="refresh()">刷新消息</el-button>
+          </div>
+        </template>
+        <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
+        <div v-loading="loading" class="chat-thread">
+          <el-empty v-if="!memberId" description="请选择会话" :image-size="80" />
+          <el-empty v-else-if="conversationReady && !messages.length" description="暂无消息" :image-size="80" />
+          <ul v-if="messages.length" ref="messageList" class="message-list" aria-live="polite">
+            <li v-for="message in messages" :key="message.id"
+              :class="{ 'message--staff': message.sender === 'staff' }">
+              <strong>{{ message.sender === 'staff' ? '客服' : '会员' }}</strong>
+              <time>{{ new Date(message.created_at).toLocaleString() }}</time>
+              <p>{{ message.body }}</p>
+            </li>
+          </ul>
+        </div>
+        <div v-if="conversationReady" class="chat-composer">
+          <el-input v-model="draft" type="textarea" :rows="3" maxlength="500"
+            aria-label="输入回复" placeholder="输入回复" />
+          <el-button type="primary" :loading="sending" :disabled="!draft.trim()" @click="send">发送回复</el-button>
+        </div>
+      </el-card>
     </div>
-    <el-alert v-if="listError" :title="listError" type="error" :closable="false" />
-    <el-table v-loading="listing" :data="conversations" :empty-text="listError ? '读取失败' : '暂无会话'">
-      <el-table-column label="会员" min-width="125" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.member_name }} · {{ row.member_id }}</template>
-      </el-table-column>
-      <el-table-column prop="last_message.body" label="最新消息" min-width="185" show-overflow-tooltip />
-      <el-table-column label="未读" width="80">
-        <template #default="{ row }">
-          <el-tag v-if="row.unread_count" type="warning">{{ row.unread_count }}</el-tag>
-          <span v-else>0</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="108">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="selectConversation(row.member_id)">打开会话</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-pagination
-      v-if="total > 20" :current-page="page" :page-size="20" :total="total"
-      layout="prev, pager, next" @current-change="loadConversations"
-    />
-    <el-form inline @submit.prevent="openConversation">
-      <el-form-item label="会员编号">
-        <el-input v-model.trim="memberInput" placeholder="输入会员编号" />
-      </el-form-item>
-      <el-button type="primary" native-type="submit" :disabled="!validMember">查看会话</el-button>
-    </el-form>
-    <template v-if="memberId">
-      <p>会员 {{ memberId }} · {{ live ? '实时更新' : '可手动刷新' }}</p>
-      <el-button :loading="loading" @click="refresh()">刷新消息</el-button>
-      <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
-      <el-empty v-if="conversationReady && !messages.length" description="暂无消息" />
-      <ul v-if="messages.length" ref="messageList" class="message-list" aria-live="polite">
-        <li v-for="message in messages" :key="message.id">
-          <strong>{{ message.sender === 'staff' ? '客服' : '会员' }}</strong>
-          <time>{{ new Date(message.created_at).toLocaleString() }}</time>
-          <p>{{ message.body }}</p>
-        </li>
-      </ul>
-      <template v-if="conversationReady">
-        <el-input v-model="draft" type="textarea" :rows="3" maxlength="500" placeholder="输入回复" />
-        <el-button type="primary" :loading="sending" :disabled="!draft.trim()" @click="send">发送回复</el-button>
-      </template>
-    </template>
   </section>
 </template>
 
@@ -78,6 +101,7 @@ const live = ref(false)
 const loading = ref(false)
 const conversationReady = ref(false)
 const conversations = ref<Conversation[]>([])
+const activeConversation = computed(() => conversations.value.find((item) => item.member_id === memberId.value))
 const unreadOnly = ref(false)
 const page = ref(1)
 const total = ref(0)
@@ -280,15 +304,47 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.support-page { display: grid; gap: 16px; padding: 24px 28px; max-width: 880px; }
+.support-page { display: grid; gap: 16px; }
 .support-page h1, .support-page p { margin: 0; }
-.support-page form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.support-page form :deep(.el-form-item) { margin: 0; }
-.support-page form :deep(.el-button) { height: 42px; }
+.support-workspace { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
+.conversation-panel :deep(.el-card__body), .chat-panel :deep(.el-card__body) { display: grid; gap: 12px; }
 .conversation-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.support-page > .el-button { justify-self: start; }
-.message-list { display: grid; gap: 12px; list-style: none; padding: 0; margin: 0; max-height: 42vh; overflow-y: auto; }
-.message-list li { padding: 12px; border: 1px solid var(--el-border-color); border-radius: 8px; }
+.conversation-content { min-height: 100px; max-height: 48vh; overflow: auto; }
+.conversation-list { display: grid; gap: 3px; list-style: none; padding: 0; margin: 0; }
+.conversation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--omc-color-text);
+  text-align: start;
+  cursor: pointer;
+}
+.conversation:hover { background: var(--omc-color-surface-soft); }
+.conversation.is-current { background: var(--omc-color-primary-soft); border-color: var(--omc-color-primary-soft-border); }
+.conversation:focus-visible { outline: 2px solid var(--omc-color-primary); outline-offset: -2px; }
+.conversation-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%; background: var(--omc-color-primary-soft); color: var(--omc-color-primary); }
+.conversation-summary { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.conversation-summary strong, .conversation-excerpt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-excerpt, .conversation-read, .chat-meta { color: var(--omc-color-text-secondary); font-size: 12px; }
+.member-lookup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--omc-color-border-light); }
+.member-lookup :deep(.el-form-item) { flex: 1; min-width: 176px; margin: 0; }
+.member-lookup :deep(.el-button) { height: var(--omc-control-height); }
+.chat-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.chat-meta { padding-top: 4px; }
+.chat-thread { min-height: 180px; background: var(--omc-color-surface-soft); border-radius: 8px; }
+.message-list { display: grid; gap: 12px; list-style: none; padding: 16px; margin: 0; max-height: 48vh; overflow-y: auto; }
+.message-list li { justify-self: start; min-width: 0; max-width: 85%; padding: 12px; border: 1px solid var(--el-border-color); border-radius: 8px; background: var(--omc-color-surface); }
+.message-list .message--staff { justify-self: end; background: var(--omc-color-primary-soft); }
 .message-list time { margin-inline-start: 12px; color: var(--el-text-color-secondary); }
 .message-list p { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-composer { display: grid; justify-items: end; gap: 10px; }
+@media (max-width: 950px) {
+  .support-workspace { grid-template-columns: minmax(0, 1fr); }
+  .conversation-content { max-height: 33vh; }
+}
 </style>

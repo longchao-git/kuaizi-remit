@@ -14,29 +14,32 @@
       <el-button :disabled="loading" @click="reset">重置</el-button>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table scrollbar-always-on v-loading="loading" :data="rows" border empty-text="暂无注销申请">
-      <el-table-column prop="id" label="申请编号" width="92" />
-      <el-table-column prop="member_id" label="会员编号" width="92" />
-      <el-table-column label="状态" min-width="140">
-        <template #default="{ row }">{{ statusLabel(row.status) }}</template>
-      </el-table-column>
-      <el-table-column label="提交时间" width="160">
-        <template #default="{ row }">{{ date(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="审核时间" width="160">
-        <template #default="{ row }">{{ date(row.reviewed_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="110">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDetails(row)">详情</el-button>
-          <el-button v-if="row.status === 'pending'" link type="primary" @click="openReview(row)">审核</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-pagination
-      v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
-      layout="prev, pager, next" @current-change="load"
-    />
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>申请记录</h2></template>
+      <el-table scrollbar-always-on v-loading="loading" :data="rows" border empty-text="暂无注销申请">
+        <el-table-column prop="id" label="申请编号" width="92" />
+        <el-table-column prop="member_id" label="会员编号" width="92" />
+        <el-table-column label="状态" min-width="140">
+          <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+        </el-table-column>
+        <el-table-column label="提交时间" width="160">
+          <template #default="{ row }">{{ date(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="审核时间" width="160">
+          <template #default="{ row }">{{ date(row.reviewed_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDetails(row)">详情</el-button>
+            <el-button v-if="row.status === 'pending'" link type="primary" @click="openReview(row)">审核</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-pagination
+        v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
+        layout="prev, pager, next" @current-change="load"
+      />
+    </el-card>
     <el-dialog v-model="reviewOpen" title="审核注销申请" width="min(480px, 92vw)" :close-on-click-modal="false">
       <el-form label-position="top" @submit.prevent="review">
         <el-form-item label="注销原因"><span class="closure-note">{{ selected?.reason || '—' }}</span></el-form-item>
@@ -158,8 +161,8 @@ onMounted(() => { void load(1) })
 </script>
 
 <style scoped>
-.closures-page { padding: 24px; }
-h1 { margin: 0 0 20px; font-size: 24px; }
+.closures-page { display: grid; gap: 16px; }
+h1 { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 16px; }
 .filters :deep(.el-form-item), .filters :deep(.el-button + .el-button) { margin: 0; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

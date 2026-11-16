@@ -9,21 +9,24 @@
       <el-button :loading="loading" @click="load(page)">刷新</el-button>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无客服工单'">
-      <el-table-column prop="id" label="工单编号" width="100" />
-      <el-table-column prop="member_id" label="会员编号" width="100" />
-      <el-table-column prop="subject" label="标题" min-width="160" show-overflow-tooltip />
-      <el-table-column label="状态" width="110">
-        <template #default="{ row }">{{ labels[row.status as TicketStatus] }}</template>
-      </el-table-column>
-      <el-table-column label="提交时间" min-width="150">
-        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="100">
-        <template #default="{ row }"><el-button link type="primary" @click="open(row.id)">查看工单</el-button></template>
-      </el-table-column>
-    </el-table>
-    <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" layout="prev, pager, next" @current-change="load" />
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>工单列表</h2></template>
+      <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无客服工单'">
+        <el-table-column prop="id" label="工单编号" width="100" />
+        <el-table-column prop="member_id" label="会员编号" width="100" />
+        <el-table-column prop="subject" label="标题" min-width="160" show-overflow-tooltip />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">{{ labels[row.status as TicketStatus] }}</template>
+        </el-table-column>
+        <el-table-column label="提交时间" min-width="150">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="100">
+          <template #default="{ row }"><el-button link type="primary" @click="open(row.id)">查看工单</el-button></template>
+        </el-table-column>
+      </el-table>
+      <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" layout="prev, pager, next" @current-change="load" />
+    </el-card>
     <el-dialog v-model="dialog" title="工单详情" width="min(600px, 94vw)" :before-close="close">
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
       <section v-loading="reading" class="ticket-detail">
@@ -175,7 +178,7 @@ onMounted(() => void load(1))
 </script>
 
 <style scoped>
-.ticket-page { display: grid; gap: 16px; padding: 24px 28px; }
+.ticket-page { display: grid; gap: 16px; }
 .ticket-page h1 { margin: 0; }
 .toolbar { display: flex; align-items: center; gap: 12px; }
 .toolbar .el-select { width: 180px; max-width: 60%; }

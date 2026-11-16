@@ -59,7 +59,7 @@
         </el-card>
       </div>
       <el-card class="recent-panel" shadow="never">
-        <h2>最近汇款</h2>
+        <h2>最近订单</h2>
         <el-table :data="data.recent" stripe empty-text="该区间暂无订单">
           <el-table-column label="订单号" min-width="250" show-overflow-tooltip>
             <template #default="{ row }">
@@ -80,6 +80,7 @@
             <template #default="{ row }">{{ madridTime.format(new Date(row.created_at)) }}</template>
           </el-table-column>
         </el-table>
+        <router-link class="recent-link all-orders" to="/system/remittance/orders">查看全部订单</router-link>
       </el-card>
     </template>
   </section>
@@ -166,6 +167,7 @@ onMounted(load)
 .toolbar h1 { margin: 0; font-size: 24px; }
 .toolbar-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .recent-link { color: var(--omc-color-primary); }
+.all-orders { display: inline-block; margin-top: 14px; }
 .trend-chart {
   --trend-orders: #c5d7e3;
   --trend-paid-out: #298f83;

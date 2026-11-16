@@ -8,7 +8,7 @@
       <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
     </el-form>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
-    <el-card shadow="never">
+    <el-card class="remit-card" shadow="never">
       <template #header><h2>会员列表</h2></template>
       <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="loadError ? '读取失败' : '暂无会员'">
         <el-table-column prop="id" label="会员编号" min-width="100" />
@@ -60,9 +60,9 @@
     <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
     <div v-loading="detailLoading" class="member-detail">
       <template v-if="detail">
-        <el-card shadow="never">
+        <el-card class="remit-card" shadow="never">
           <template #header><h2>用户概览</h2></template>
-          <el-descriptions :column="1" border>
+          <el-descriptions class="remit-details" :column="1" border>
             <el-descriptions-item label="会员编号">{{ detail.id }}</el-descriptions-item>
             <el-descriptions-item label="姓名">{{ detail.name }}</el-descriptions-item>
             <el-descriptions-item label="邮箱">{{ detail.email || '—' }}</el-descriptions-item>
@@ -70,9 +70,9 @@
             <el-descriptions-item label="注册时间（马德里）">{{ formatDate(detail.created_at) }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
-        <el-card shadow="never">
+        <el-card class="remit-card" shadow="never">
           <template #header><h2>身份认证</h2></template>
-          <el-descriptions :column="1" border>
+          <el-descriptions class="remit-details" :column="1" border>
             <el-descriptions-item label="当前状态">
               <el-tag :type="detail.kyc_code === '5004' ? 'success' : 'info'">{{ kycStatus(detail) }}</el-tag>
             </el-descriptions-item>

@@ -1,42 +1,44 @@
 <template>
   <section class="coupons">
     <header><h1>汇款优惠券</h1><el-button v-if="activeTab === 'coupons'" type="primary" @click="openIssue()">发放优惠券</el-button></header>
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="发券记录" name="coupons">
-        <el-alert v-if="error" :title="error" type="error" :closable="false" />
-        <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无优惠券'">
-          <el-table-column prop="title" label="名称" min-width="145" />
-          <el-table-column label="基础手续费减免" width="145">
-            <template #default="{ row }">{{ couponTypeLabels[row.coupon_type as CouponType] }} · {{ row.discount_bps / 100 }}%</template>
-          </el-table-column>
-          <el-table-column label="收款渠道" min-width="100">
-            <template #default="{ row }">{{ channelLabels[row.payout_method ?? 'all'] }}</template>
-          </el-table-column>
-          <el-table-column label="领取方式" min-width="100">
-            <template #default="{ row }">{{ deliveryLabels[row.delivery] }}</template>
-          </el-table-column>
-          <el-table-column prop="code" label="一次性优惠码" min-width="205">
-            <template #default="{ row }">{{ row.status === 'unclaimed' ? row.code : '—' }}</template>
-          </el-table-column>
-          <el-table-column prop="member_id" label="会员编号" width="105" />
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }">{{ labels[row.status] }}</template>
-          </el-table-column>
-          <el-table-column label="有效期至" min-width="160">
-            <template #default="{ row }">{{ new Date(row.expires_at).toLocaleString() }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="85">
-            <template #default="{ row }">
-              <el-button v-if="revocableStates.has(row.status)" link type="danger" :disabled="revoking" @click="revoke(row)">撤销</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" layout="prev, pager, next" @current-change="load" />
-      </el-tab-pane>
-      <el-tab-pane label="优惠券模板" name="templates" lazy>
-        <RemitCouponTemplates @issue="openIssue" />
-      </el-tab-pane>
-    </el-tabs>
+    <el-card class="remit-card" shadow="never">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="发券与核销" name="coupons">
+          <el-alert v-if="error" :title="error" type="error" :closable="false" />
+          <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无优惠券'">
+            <el-table-column prop="title" label="名称" min-width="145" />
+            <el-table-column label="基础手续费减免" width="145">
+              <template #default="{ row }">{{ couponTypeLabels[row.coupon_type as CouponType] }} · {{ row.discount_bps / 100 }}%</template>
+            </el-table-column>
+            <el-table-column label="收款渠道" min-width="100">
+              <template #default="{ row }">{{ channelLabels[row.payout_method ?? 'all'] }}</template>
+            </el-table-column>
+            <el-table-column label="领取方式" min-width="100">
+              <template #default="{ row }">{{ deliveryLabels[row.delivery] }}</template>
+            </el-table-column>
+            <el-table-column prop="code" label="一次性优惠码" min-width="205">
+              <template #default="{ row }">{{ row.status === 'unclaimed' ? row.code : '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="member_id" label="会员编号" width="105" />
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">{{ labels[row.status] }}</template>
+            </el-table-column>
+            <el-table-column label="有效期至" min-width="160">
+              <template #default="{ row }">{{ new Date(row.expires_at).toLocaleString() }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="85">
+              <template #default="{ row }">
+                <el-button v-if="revocableStates.has(row.status)" link type="danger" :disabled="revoking" @click="revoke(row)">撤销</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" layout="prev, pager, next" @current-change="load" />
+        </el-tab-pane>
+        <el-tab-pane label="优惠券模板" name="templates" lazy>
+          <RemitCouponTemplates @issue="openIssue" />
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
     <el-dialog v-model="dialog" title="发放优惠券" width="min(500px, 94vw)" :before-close="closeIssue" :close-on-click-modal="false">
       <el-form label-position="top" @submit.prevent="issue">
         <el-form-item v-if="template" label="优惠券模板">
@@ -188,7 +190,7 @@ onMounted(() => void load(1))
 </script>
 
 <style scoped>
-.coupons { display: grid; gap: 16px; padding: 24px 28px; }
+.coupons { display: grid; gap: 16px; }
 .coupons header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .coupons h1 { margin: 0; }
 </style>

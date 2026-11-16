@@ -2,26 +2,31 @@
   <section class="staff-page">
     <h1>员工角色</h1>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="staff" empty-text="暂无员工">
-      <el-table-column prop="name" label="姓名" min-width="120" />
-      <el-table-column prop="email" label="邮箱" min-width="180" />
-      <el-table-column label="当前角色" min-width="120"><template #default="{ row }">{{ labels[row.role] }}</template></el-table-column>
-      <el-table-column label="操作" min-width="155">
-        <template #default="{ row }">
-          <el-button v-if="row.role !== 'administrator'" link type="primary" :disabled="saving" @click="openRole(row)">分配角色</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-pagination v-if="staffTotal > 20" :current-page="staffPage" :disabled="loading" :page-size="20" :total="staffTotal" layout="prev, pager, next" @current-change="loadStaff" />
-    <h2>角色变更记录</h2>
-    <el-table v-loading="auditLoading" :data="audits" empty-text="暂无记录">
-      <el-table-column prop="operator_name" label="操作人" min-width="110" />
-      <el-table-column prop="target_name" label="员工" min-width="110" />
-      <el-table-column label="原角色" min-width="110"><template #default="{ row }">{{ labels[row.before_role ?? 'legacy'] }}</template></el-table-column>
-      <el-table-column label="新角色" min-width="110"><template #default="{ row }">{{ labels[row.after_role] }}</template></el-table-column>
-      <el-table-column prop="created_at" label="更新时间" min-width="170" />
-    </el-table>
-    <el-pagination v-if="auditTotal > 20" :current-page="auditPage" :disabled="auditLoading" :page-size="20" :total="auditTotal" layout="prev, pager, next" @current-change="loadAudits" />
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>员工列表</h2></template>
+      <el-table v-loading="loading" :data="staff" empty-text="暂无员工">
+        <el-table-column prop="name" label="姓名" min-width="120" />
+        <el-table-column prop="email" label="邮箱" min-width="180" />
+        <el-table-column label="当前角色" min-width="120"><template #default="{ row }">{{ labels[row.role] }}</template></el-table-column>
+        <el-table-column label="操作" min-width="155">
+          <template #default="{ row }">
+            <el-button v-if="row.role !== 'administrator'" link type="primary" :disabled="saving" @click="openRole(row)">分配角色</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-pagination v-if="staffTotal > 20" :current-page="staffPage" :disabled="loading" :page-size="20" :total="staffTotal" layout="prev, pager, next" @current-change="loadStaff" />
+    </el-card>
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>角色变更记录</h2></template>
+      <el-table v-loading="auditLoading" :data="audits" empty-text="暂无记录">
+        <el-table-column prop="operator_name" label="操作人" min-width="110" />
+        <el-table-column prop="target_name" label="员工" min-width="110" />
+        <el-table-column label="原角色" min-width="110"><template #default="{ row }">{{ labels[row.before_role ?? 'legacy'] }}</template></el-table-column>
+        <el-table-column label="新角色" min-width="110"><template #default="{ row }">{{ labels[row.after_role] }}</template></el-table-column>
+        <el-table-column prop="created_at" label="更新时间" min-width="170" />
+      </el-table>
+      <el-pagination v-if="auditTotal > 20" :current-page="auditPage" :disabled="auditLoading" :page-size="20" :total="auditTotal" layout="prev, pager, next" @current-change="loadAudits" />
+    </el-card>
     <el-dialog v-model="dialog" title="分配角色" width="min(440px, 92vw)" :before-close="closeRole" :close-on-click-modal="false">
       <el-form label-position="top" @submit.prevent="save">
         <el-form-item label="员工">{{ selected?.name }} · {{ selected?.email }}</el-form-item>
@@ -124,6 +129,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.staff-page { display: grid; gap: 16px; padding: 24px 28px; }
+.staff-page { display: grid; gap: 16px; }
 .staff-page h1, .staff-page h2 { margin: 0; }
 </style>

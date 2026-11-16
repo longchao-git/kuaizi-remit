@@ -9,11 +9,14 @@
       <el-button :disabled="loading" @click="reset">重置</el-button>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '没有匹配的原因码'">
-      <el-table-column prop="code" label="原因码" min-width="215" show-overflow-tooltip />
-      <el-table-column prop="title" label="客户提示" min-width="150" />
-      <el-table-column prop="guidance" label="客服处理建议" min-width="230" />
-    </el-table>
+    <el-card class="remit-card" shadow="never">
+      <template #header><h2>原因码列表</h2></template>
+      <el-table v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '没有匹配的原因码'">
+        <el-table-column prop="code" label="原因码" min-width="215" show-overflow-tooltip />
+        <el-table-column prop="title" label="客户提示" min-width="150" />
+        <el-table-column prop="guidance" label="客服处理建议" min-width="230" />
+      </el-table>
+    </el-card>
   </section>
 </template>
 
@@ -51,9 +54,10 @@ onMounted(() => void load())
 </script>
 
 <style scoped>
-.reasons { display: grid; gap: 16px; padding: 24px 28px; }
+.reasons { display: grid; gap: 16px; }
 .reasons h1 { margin: 0; }
-.search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; margin: 0; }
 .search :deep(.el-form-item), .search .el-button { margin: 0; }
+.search :deep(.el-input__wrapper), .search .el-button { height: var(--omc-control-height); }
 .search .el-input { width: min(245px, 68vw); }
 </style>
