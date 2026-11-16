@@ -49,6 +49,12 @@ uni.scss
 
 App 和小程序仍用 HBuilderX 打开 `app` 目录运行，交付前至少完成一次目标平台运行和发行构建。
 
+### App 原生启动图
+
+资产位于 `native-splash/`。Android 使用 480×762、720×1242、1080×1882 三档 `.9.png`，iOS 使用包含 `LaunchScreen.storyboard` 和两档 PNG 的 `LaunchScreen.zip`。`manifest.json` 已按项目内相对路径配置。Android 和 iOS 安装包从原生启动界面直接进入业务入口，H5 演示保留品牌启动页。
+
+使用 HBuilderX 的「App 启动界面配置」核对路径并打包安装，再分别冷启动验证。普通运行基座的启动图由基座决定。参见 [DCloud 启动界面配置](https://uniapp.dcloud.net.cn/tutorial/app-splashscreen.html)。
+
 H5 也可以在命令行运行（uni-app Vue3 CLI，Node 24+）：
 
 ```bash

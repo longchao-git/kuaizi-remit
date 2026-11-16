@@ -12,7 +12,7 @@
 		"compilerVersion": 3,
 		"splashscreen": {
 			"alwaysShowBeforeRender": true,
-			"waiting": true,
+			"waiting": false,
 			"autoclose": true,
 			"delay": 0
 		},
@@ -20,6 +20,19 @@
 		"modules": {},
 		/* 应用发布信息 */
 		"distribute": {
+			"splashscreen": {
+				"androidStyle": "default",
+				"androidNavigationBarColor": "#5E51F1",
+				"android": {
+					"hdpi": "native-splash/android/480.9.png",
+					"xhdpi": "native-splash/android/720.9.png",
+					"xxhdpi": "native-splash/android/1080.9.png"
+				},
+				"iosStyle": "storyboard",
+				"ios": {
+					"storyboard": "native-splash/ios/LaunchScreen.zip"
+				}
+			},
 			/* android打包配置 */
 			"android": {},
 			/* ios打包配置 */

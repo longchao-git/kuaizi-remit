@@ -118,7 +118,7 @@
 
     <template v-else>
       <view class="top">
-        <button role="button" tabindex="0" v-if="!isTab" class="back-hit" aria-label="返回" @tap="back">
+        <button v-if="!isTab && screen > startupScreen" role="button" tabindex="0" class="back-hit" aria-label="返回" @tap="back">
           <text v-if="screen >= 14 && screen <= 16">×</text>
           <image v-else class="round-icon" src="/static/remit/back.svg" mode="aspectFit" />
         </button>
@@ -377,6 +377,10 @@ const tabs = [
 ];
 
 const screen = ref(1);
+// #ifdef APP-PLUS
+screen.value = 2;
+// #endif
+const startupScreen = screen.value;
 const localLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_LOGIN === 'true';
 const smsLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_SMS_LOGIN !== "false";
 const smsAutofillEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_SMS_AUTOFILL !== "false";
@@ -585,7 +589,7 @@ function back() {
     }
   }
   if (previous) orderId.value = previous.orderId;
-  setScreen(previous?.screen ?? (screen.value <= 2 ? 1 : 6));
+  setScreen(previous?.screen ?? (screen.value <= 2 ? startupScreen : 6));
 }
 
 function closeSheet() {
@@ -891,7 +895,7 @@ function closeLocalSession() {
 }
 
 onMounted(() => {
-  if (!localSessionOpen.value) scheduleSplash();
+  if (screen.value === 1 && !localSessionOpen.value) scheduleSplash();
 });
 onShow(refreshCountdown);
 onShow(() => {
@@ -909,7 +913,7 @@ onBackPress(() => {
     closeSheet();
     return true;
   }
-  if (screen.value === 1 || screen.value === 6) return false;
+  if (screen.value <= startupScreen || screen.value === 6) return false;
   back();
   return true;
 });
