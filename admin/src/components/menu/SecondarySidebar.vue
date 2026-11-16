@@ -43,21 +43,17 @@ const handleClick = (menu: MenuVO) => {
 
 <style scoped>
 .secondary-sidebar {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 30px 12px 28px;
-  background: var(--omc-color-surface);
-  border-inline-end: 1px solid var(--omc-color-border-light);
-  overflow-y: auto;
+  margin: 4px 0 6px 20px;
+  padding-inline-start: 6px;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .secondary-sidebar__section {
-  padding: 4px 0;
+  padding: 0;
 }
 
 .secondary-sidebar__section + .secondary-sidebar__section {
-  margin-top: 24px;
+  margin-top: 10px;
 }
 
 .secondary-sidebar__title {
@@ -65,35 +61,34 @@ const handleClick = (menu: MenuVO) => {
   padding: 0 8px;
   font-size: 14px;
   line-height: 22px;
-  color: var(--omc-color-text-secondary);
+  color: var(--omc-color-sidebar-text);
 }
 
 .secondary-sidebar__item {
   width: 100%;
-  min-height: 30px;
-  padding: 4px 8px;
+  min-height: 34px;
+  padding: 4px 10px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   border: 0;
   border-radius: var(--omc-radius-sm);
   background: transparent;
-  color: var(--omc-color-text);
+  color: var(--omc-color-sidebar-text);
   cursor: pointer;
   text-align: left;
-  font-size: 14px;
-  margin-bottom: 8px;
+  font-size: 13px;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .secondary-sidebar__item:hover {
-  background: var(--omc-color-primary-soft);
-  color: var(--omc-color-primary);
+  background: var(--omc-color-sidebar-hover);
+  color: var(--omc-color-surface);
 }
 
 .secondary-sidebar__item.is-active {
-  background: var(--omc-color-primary-soft);
-  color: var(--omc-color-primary-active);
+  background: var(--omc-color-sidebar-active);
+  color: var(--omc-color-sidebar-active-text);
   font-weight: 600;
 }
 </style>

@@ -107,7 +107,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.dashboard-page { padding: 24px; color: var(--omc-color-text); }
+.dashboard-page { color: var(--omc-color-text); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .toolbar h1 { margin: 0; font-size: 24px; }
 .toolbar-controls { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -1,20 +1,13 @@
 <template>
   <el-container class="layout">
     <el-container class="body">
-      <el-aside class="aside" :width="`${asideWidth}px`">
-        <div class="aside-shell">
-          <SidebarMenu
-            :menus="primaryMenus"
-            :active-primary-path="activePrimaryPath"
-            @select="goTo"
-          />
-          <SecondarySidebar
-            v-if="showSecondarySidebar"
-            :sections="secondarySections"
-            :active-path="activeMenuPath"
-            @select="goTo"
-          />
-        </div>
+      <el-aside class="aside" width="var(--remit-sidebar-width)">
+        <SidebarMenu
+          :menus="primaryMenus"
+          :active-primary-path="activePrimaryPath"
+          :active-path="activeMenuPath"
+          @select="goTo"
+        />
       </el-aside>
 
       <el-container class="content-shell">
@@ -29,18 +22,21 @@
                 <span>{{ menuSecondTitle }}</span>
               </el-breadcrumb-item>
             </el-breadcrumb>
-            <div v-else class="page-header__title">{{ currentPageTitle }}</div>
+            <el-breadcrumb v-else class="page-header__breadcrumb" separator="/">
+              <el-breadcrumb-item>跨境汇款</el-breadcrumb-item>
+              <el-breadcrumb-item v-if="currentMenuChain.length > 1">{{ activePrimaryMenu?.name }}</el-breadcrumb-item>
+              <el-breadcrumb-item>{{ currentPageTitle }}</el-breadcrumb-item>
+            </el-breadcrumb>
           </div>
           <div class="page-header__right">
             <el-dropdown trigger="click" @command="onUserCommand">
-              <div class="page-header__user-trigger">
+              <button type="button" class="page-header__user-trigger">
                 <span class="page-header__user-name">{{ userDisplayName }}</span>
                 <el-icon class="page-header__user-arrow"><ArrowDown /></el-icon>
-              </div>
+              </button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="account">我的账号</el-dropdown-item>
-                  <el-dropdown-item command="logout">退出</el-dropdown-item>
+                  <el-dropdown-item command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -48,7 +44,8 @@
         </el-header>
 
         <el-main class="main">
-          <router-view />
+          <el-empty v-if="route.path === '/system'" description="当前账号暂无可访问的后台页面" />
+          <router-view v-else />
         </el-main>
       </el-container>
     </el-container>
@@ -62,21 +59,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useSessionService } from '@/shared/factory/session'
 import SidebarMenu from '@/components/menu/SidebarMenu.vue'
-import SecondarySidebar from '@/components/menu/SecondarySidebar.vue'
 import {
   findMenuChainByPath,
   getActivePrimaryMenu,
   getPrimaryMenus,
-  getSecondaryMenuSections,
   resolveCurrentPageTitle,
   resolveLayoutActivePath,
   resolveMenuChainForRoute
 } from '@/shared/utils/menuTree'
 
 defineOptions({ name: 'AppLayout' })
-
-const PRIMARY_SIDEBAR_WIDTH = 120
-const SECONDARY_SIDEBAR_WIDTH = 144
 
 const route = useRoute()
 const router = useRouter()
@@ -88,13 +80,10 @@ const userDisplayName = computed(() => username.value || '未登录')
 const primaryMenus = computed(() => getPrimaryMenus(userStore.menus))
 const activePrimaryMenu = computed(() => getActivePrimaryMenu(userStore.menus, route.path))
 const activePrimaryPath = computed(() => String(activePrimaryMenu.value?.path || ''))
-const secondarySections = computed(() => getSecondaryMenuSections(activePrimaryMenu.value))
 const activeMenuPath = computed(() => resolveLayoutActivePath(userStore.menus, route.path))
-const showSecondarySidebar = computed(() => secondarySections.value.length > 0)
-const asideWidth = computed(() => PRIMARY_SIDEBAR_WIDTH + (showSecondarySidebar.value ? SECONDARY_SIDEBAR_WIDTH : 0))
 const exactMenuChain = computed(() => findMenuChainByPath(userStore.menus, route.path))
 const currentMenuChain = computed(() => resolveMenuChainForRoute(userStore.menus, route.path))
-const currentPageTitle = computed(() => resolveCurrentPageTitle(userStore.menus, route.path) || 'Template Admin')
+const currentPageTitle = computed(() => resolveCurrentPageTitle(userStore.menus, route.path) || '管理后台')
 const showBackButton = computed(() => exactMenuChain.value.length === 0 && currentMenuChain.value.length > 0)
 const routePageTitle = computed(() => String(route.meta?.title || '').trim())
 const superiorTitle = computed(() => (showBackButton.value ? currentPageTitle.value : ''))
@@ -102,21 +91,6 @@ const menuSecondTitle = computed(() => {
   if (!showBackButton.value) return currentPageTitle.value
   return routePageTitle.value || currentPageTitle.value
 })
-
-const goAccount = () => {
-  router.push('/system/account')
-}
-
-const onUserCommand = (command: string | number | object) => {
-  const action = String(command)
-  if (action === 'account') {
-    goAccount()
-    return
-  }
-  if (action === 'logout') {
-    void doLogout()
-  }
-}
 
 const goTo = (path: string) => {
   if (!path || path === route.path) return
@@ -130,7 +104,7 @@ const goBack = () => {
   router.push(fallback)
 }
 
-const doLogout = async () => {
+const onUserCommand = async () => {
   await sessionService.logout()
   router.replace('/login')
 }
@@ -138,6 +112,7 @@ const doLogout = async () => {
 
 <style scoped>
 .layout {
+  --remit-sidebar-width: 232px;
   height: 100vh;
   background: var(--omc-color-surface-soft);
 }
@@ -149,14 +124,8 @@ const doLogout = async () => {
 .aside {
   height: 100%;
   flex: 0 0 auto;
-  background: var(--omc-color-surface);
-}
-
-.aside-shell {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  overflow: hidden;
+  background: var(--omc-color-sidebar-top);
+  overflow-x: hidden;
 }
 
 .content-shell {
@@ -169,11 +138,11 @@ const doLogout = async () => {
 }
 
 .page-header {
-  height: 66px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 32px;
   flex: 0 0 auto;
   background: var(--omc-color-surface);
   border-bottom: 1px solid var(--omc-color-border-light);
@@ -232,20 +201,17 @@ const doLogout = async () => {
   font-size: 14px;
 }
 
-.page-header__title {
-  font-size: 14px;
-  color: var(--omc-color-text);
-}
-
 .page-header__right {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .page-header__user-trigger {
   padding: 10px 20px;
-  height: 50px;
+  min-height: 36px;
+  max-width: 24vw;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -270,9 +236,19 @@ const doLogout = async () => {
 }
 
 .main {
-  padding: 16px;
+  padding: 24px clamp(16px, 2.4vw, 38px);
   background: transparent;
   flex: 0 0 auto;
   overflow: visible;
+}
+
+@media (max-width: 1100px) {
+  .layout { --remit-sidebar-width: 200px; }
+  .page-header { padding-inline: 20px; }
+}
+
+@media (max-width: 760px) {
+  .layout { --remit-sidebar-width: 152px; }
+  .page-header { padding-inline: 12px; }
 }
 </style>

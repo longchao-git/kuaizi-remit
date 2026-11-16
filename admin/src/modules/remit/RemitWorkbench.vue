@@ -81,7 +81,7 @@
         <el-table-column prop="scope" label="操作范围" min-width="260" />
       </el-table>
       <div class="workbench-actions">
-        <el-button type="primary" @click="router.push('/system/role')">打开正式角色管理</el-button>
+        <el-button type="primary" @click="router.push('/system/remittance/staff')">打开正式角色管理</el-button>
       </div>
     </template>
 

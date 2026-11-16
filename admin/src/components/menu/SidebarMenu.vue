@@ -4,41 +4,55 @@
       <span class="primary-sidebar__logo" aria-hidden="true">KZ</span>
       <span class="primary-sidebar__brand-name">筷子闪汇</span>
     </div>
-    <div class="primary-sidebar__list">
-      <button
-        v-for="menu in menus"
-        :key="menu.id || menu.path || menu.name"
-        type="button"
-        :class="['primary-sidebar__item', { 'is-active': isActive(menu) }]"
-        @click="handleClick(menu)"
-      >
-        <img
-          v-if="isImageIcon(menu.icon)"
-          :src="String(menu.icon)"
-          alt="menu icon"
-          class="primary-sidebar__icon primary-sidebar__icon--image"
+    <nav class="primary-sidebar__list" aria-label="后台导航">
+      <div v-for="menu in menus" :key="menu.id || menu.path || menu.name" class="primary-sidebar__group">
+        <button
+          type="button"
+          :class="['primary-sidebar__item', { 'is-active': isActive(menu) }]"
+          :aria-expanded="hasVisibleChildren(menu) ? isActive(menu) : undefined"
+          :aria-current="!hasVisibleChildren(menu) && isActive(menu) ? 'page' : undefined"
+          @click="handleClick(menu)"
+        >
+          <img
+            v-if="isImageIcon(menu.icon)"
+            :src="String(menu.icon)"
+            alt=""
+            class="primary-sidebar__icon primary-sidebar__icon--image"
+          />
+          <component
+            :is="resolveIcon(menu.icon)"
+            v-else-if="menu.icon"
+            class="primary-sidebar__icon"
+            aria-hidden="true"
+          />
+          <span v-else class="primary-sidebar__initial" aria-hidden="true">{{ displayName(menu).slice(0, 1) }}</span>
+          <span class="primary-sidebar__label">{{ displayName(menu) }}</span>
+          <el-icon v-if="hasVisibleChildren(menu)" class="primary-sidebar__arrow" aria-hidden="true"><ArrowDown /></el-icon>
+        </button>
+        <SecondarySidebar
+          v-if="isActive(menu) && hasVisibleChildren(menu)"
+          :sections="getSecondaryMenuSections(menu)"
+          :active-path="activePath"
+          @select="emit('select', $event)"
         />
-        <component
-          :is="resolveIcon(menu.icon)"
-          v-else-if="menu.icon"
-          class="primary-sidebar__icon"
-        />
-        <span class="primary-sidebar__label">{{ displayName(menu) }}</span>
-      </button>
-    </div>
+      </div>
+    </nav>
   </div>
 </template>
 
 <script setup lang="ts">
 import { resolveDynamicComponent } from 'vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import type { MenuVO } from '@/shared/types/menu'
-import { resolveFirstVisibleMenuPath, resolveMenuDisplayName } from '@/shared/utils/menuTree'
+import { getSecondaryMenuSections, hasVisibleChildren, resolveFirstVisibleMenuPath, resolveMenuDisplayName } from '@/shared/utils/menuTree'
+import SecondarySidebar from './SecondarySidebar.vue'
 
 defineOptions({ name: 'SidebarMenu' })
 
 const props = defineProps<{
   menus: MenuVO[]
   activePrimaryPath: string
+  activePath: string
 }>()
 
 const emit = defineEmits<{
@@ -71,8 +85,8 @@ const handleClick = (menu: MenuVO) => {
 
 <style scoped>
 .primary-sidebar {
-  width: 120px;
-  height: 100%;
+  width: 100%;
+  min-height: 100%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -81,19 +95,21 @@ const handleClick = (menu: MenuVO) => {
 }
 
 .primary-sidebar__brand {
-  height: 88px;
+  min-height: 74px;
+  margin-inline: 16px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .primary-sidebar__logo {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 12px;
   background: var(--omc-color-primary);
   font-size: 12px;
   font-weight: 700;
@@ -106,16 +122,16 @@ const handleClick = (menu: MenuVO) => {
 
 .primary-sidebar__list {
   flex: 1;
-  padding: 28px 10px;
+  padding: 14px 8px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
 }
 
 .primary-sidebar__item {
   width: 100%;
-  min-height: 38px;
-  padding: 0 6px 0 12px;
+  min-height: 36px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -148,6 +164,25 @@ const handleClick = (menu: MenuVO) => {
 .primary-sidebar__icon--image {
   object-fit: cover;
   border-radius: 4px;
+}
+
+.primary-sidebar__initial {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 11px;
+}
+
+.primary-sidebar__arrow {
+  flex: 0 0 auto;
+}
+
+.primary-sidebar__item[aria-expanded="true"] .primary-sidebar__arrow {
+  transform: rotate(180deg);
 }
 
 .primary-sidebar__label {

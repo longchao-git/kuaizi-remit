@@ -1,7 +1,8 @@
 import type { RouteRecordRaw } from 'vue-router'
 import type { MenuVO } from '@/shared/types/menu'
-import { getMenuChildren, isDashboardMenu, resolveRouteChildPath, sortMenus } from '@/shared/utils/menuTree'
+import { getMenuChildren, resolveRouteChildPath, sortMenus } from '@/shared/utils/menuTree'
 import { componentMap } from './componentMap'
+import { hasPermission } from '@/utils/permission'
 
 export function buildSystemChildrenRoutes(menus: MenuVO[]): RouteRecordRaw[] {
   const roots = Array.isArray(menus) ? menus : []
@@ -19,7 +20,6 @@ export function buildSystemChildrenRoutes(menus: MenuVO[]): RouteRecordRaw[] {
       if (!comp) return
 
       const childPath = resolveRouteChildPath(String(m.path || ''))
-      const isDashboard = isDashboardMenu(m)
       const name = `System_${childPath.replace(/[^\w]/g, '_') || String(m.id || m.name)}`
       routes.push({
         path: childPath,
@@ -28,8 +28,7 @@ export function buildSystemChildrenRoutes(menus: MenuVO[]): RouteRecordRaw[] {
         meta: {
           title: m.name,
           permission: m.permission,
-          menuId: m.id,
-          isDashboard
+          menuId: m.id
         }
       } as RouteRecordRaw)
     })
@@ -45,16 +44,10 @@ export function buildSystemChildrenRoutes(menus: MenuVO[]): RouteRecordRaw[] {
  *
  * <p>只会从当前前端已映射的 componentMap 中选择有效菜单，避免跳到未注入路由导致白屏。</p>
  */
-export function resolveFirstAccessiblePath(menus: MenuVO[], fallbackPath = '/dashboard/index'): string {
-  const children = buildSystemChildrenRoutes(menus)
-  const first = children[0]
-  if (!first) return fallbackPath
-  const childPath = String(first.path || '').replace(/^\//, '')
-  if (!childPath) return fallbackPath
-
-  if (first.meta?.isDashboard) {
-    return '/dashboard'
-  } else {
-    return `/system/${childPath}`
-  }
+export function resolveFirstAccessiblePath(menus: MenuVO[]): string {
+  const first = buildSystemChildrenRoutes(menus).find(({ meta }) => {
+    const permission = meta?.permission
+    return typeof permission !== 'string' || !permission || hasPermission(permission)
+  })
+  return first?.path ? `/system/${first.path}` : '/system'
 }

@@ -58,17 +58,4 @@ export class AuthService {
     await this.repo.logout().catch(() => undefined)
   }
 
-  async changePassword(passwordData: { oldPassword: string; newPassword: string }): Promise<void> {
-    if (!passwordData.oldPassword) throw new Error('请输入原密码')
-    if (!passwordData.newPassword) throw new Error('请输入新密码')
-    if (passwordData.newPassword.length < 8 || passwordData.newPassword.length > 20) {
-      throw new Error('新密码长度必须为 8-20 位')
-    }
-
-    try {
-      await this.repo.changePassword(passwordData)
-    } catch (error) {
-      throw preserveError(error, '修改密码失败')
-    }
-  }
 }

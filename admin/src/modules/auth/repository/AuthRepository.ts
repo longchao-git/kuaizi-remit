@@ -1,4 +1,4 @@
-import { post, get, put } from '@/request/http';
+import { post, get } from '@/request/http';
 import type { LoginForm } from '../domain/LoginForm';
 import type { LoginResponse } from '../domain/LoginResponse';
 import type { UserInfo } from '../domain/UserInfo';
@@ -48,11 +48,4 @@ export class AuthRepository {
     await post<void>(`${this.basePath}/logout`);
   }
 
-  /**
-   * 修改密码
-   * @param passwordData 密码数据
-   */
-  async changePassword(passwordData: { oldPassword: string; newPassword: string }): Promise<void> {
-    await put<void>(`${this.basePath}/current/password`, passwordData);
-  }
 }
