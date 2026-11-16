@@ -86,10 +86,69 @@ final class RemitOperationsTest extends TestCase
             ->assertJsonPath('data.metrics', [
                 'order_count' => 3, 'paid_count' => 2, 'paid_principal_minor' => 20000, 'paid_out_count' => 1, 'refunded_count' => 1,
             ])
+            ->assertJsonPath('data.trend', [
+                ['date' => '2026-11-14', 'order_count' => 3, 'paid_out_count' => 1],
+            ])
             ->assertJsonPath('data.recent.1.status_label', '已退款')
             ->assertJsonPath('data.recent.2.reference', $out);
-        $this->getJson(self::ADMIN.'/dashboard?days=7')->assertOk()->assertJsonPath('data.metrics.order_count', 4);
+        $this->getJson(self::ADMIN.'/dashboard?days=7')->assertOk()->assertJsonPath('data.metrics.order_count', 4)
+            ->assertJsonCount(7, 'data.trend')
+            ->assertJsonPath('data.trend.0', ['date' => '2026-11-08', 'order_count' => 0, 'paid_out_count' => 0])
+            ->assertJsonPath('data.trend.5', ['date' => '2026-11-13', 'order_count' => 1, 'paid_out_count' => 1]);
         $this->getJson(self::ADMIN.'/dashboard?days=90')->assertUnprocessable();
+    }
+
+    public function test_dashboard_counts_each_exception_once_during_madrid_clock_change(): void
+    {
+        $this->travelTo(now('UTC')->setDate(2026, 10, 25)->setTime(12, 0));
+        $member = User::factory()->create();
+        $this->order($member, '05', '01', '00', '2026-10-24 22:00:00');
+        $this->order($member, '00', '06', '00', '2026-10-25 00:30:00');
+        $this->order($member, '00', '06', '05', '2026-10-25 01:30:00');
+        $this->order($member, '00', '05', '00', '2026-10-25 22:59:59');
+        $this->order($member, '00', '05', '00', '2026-10-25 23:00:00');
+
+        $this->loginAs($this->staff('read_only'));
+        $this->getJson(self::ADMIN.'/dashboard?days=1')->assertOk()
+            ->assertJsonPath('data.trend.0', ['date' => '2026-10-25', 'order_count' => 4, 'paid_out_count' => 1])
+            ->assertJsonPath('data.exceptions', [
+                'payment_failed_count' => 1, 'payout_failed_count' => 1, 'refund_failed_count' => 1,
+            ]);
+    }
+
+    public function test_staff_order_filters_and_read_only_details_use_saved_states_and_channels(): void
+    {
+        $member = User::factory()->create();
+        $refundFailed = $this->order($member, '00', '05', '05');
+        $refunded = $this->order($member, '00', '05', '04');
+        $pending = $this->order($member, '02', '01', '00');
+        $bank = $this->order($member, '00', '07', '00');
+        $other = $this->order(User::factory()->create(), '00', '05', '05');
+        DB::table('remittance_orders')->whereIn('reference', [$refundFailed, $refunded, $pending, $other])->update([
+            'quote_snapshot' => json_encode(['payment_method' => 'sepa', 'payout_method' => 'wechat', 'payout_minor' => 79999], JSON_THROW_ON_ERROR),
+        ]);
+        DB::table('remittance_orders')->where('reference', $bank)->update([
+            'quote_snapshot' => json_encode(['payment_method' => 'card', 'payout_method' => 'bank'], JSON_THROW_ON_ERROR),
+        ]);
+        DB::table('remittance_orders')->where('reference', $pending)->update(['payment_url' => 'https://test.example/payment']);
+
+        $url = self::ADMIN.'/orders';
+        $this->loginAs($member);
+        $this->getJson($url.'/'.$pending)->assertForbidden();
+        $this->loginAs($this->staff('read_only'));
+        $this->getJson($url.'?member_id='.$member->id.'&payment_method=sepa&payout_method=wechat&status=exception')
+            ->assertOk()->assertJsonPath('data.total', 1)->assertJsonPath('data.list.0.reference', $refundFailed)
+            ->assertJsonPath('data.summary.total', 3)->assertJsonPath('data.summary.exception', 1)
+            ->assertJsonPath('data.summary.pending_payment', 1)->assertJsonPath('data.summary.refunded', 1)
+            ->assertJsonPath('data.summary.paid_out', 0);
+        $this->getJson($url.'?payment_method=card&payout_method=bank&status=exception')
+            ->assertOk()->assertJsonPath('data.list.0.reference', $bank);
+        $this->getJson($url.'?status=invalid')->assertUnprocessable();
+        $this->getJson($url.'/'.Str::uuid())->assertNotFound();
+        $this->getJson($url.'/'.$pending)->assertOk()->assertJsonPath('data.quote.payout_minor', 79999)
+            ->assertJsonPath('data.payment_method', 'sepa')->assertJsonPath('data.payout_method', 'wechat')
+            ->assertJsonMissingPath('data.payment_url');
+        $this->postJson($url.'/'.$pending.'/refresh')->assertForbidden();
     }
 
     public function test_due_reminders_only_send_once_to_eligible_members_and_record_disabled_push(): void

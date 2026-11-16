@@ -28,12 +28,16 @@ final class RemittanceOrderService
     ) {}
 
     /** 返回保存的订单。App 始终带当前会员编号作为归属条件。 */
-    public function page(int $page, ?int $member, ?string $reference = null, bool $staff = false): Result
+    public function page(int $page, ?int $member, ?string $reference = null, bool $staff = false, array $filters = []): Result
     {
-        $rows = $this->orders->page($page, $member, $reference);
+        $rows = $this->orders->page($page, $member, $reference, $filters);
         $items = array_map(fn (RemittanceOrder $order) => $this->format($order, $staff), $rows->items());
+        $payload = PaginationPayload::from($items, $rows->total(), $page, $rows->perPage())->toArray();
+        if ($staff) {
+            $payload['summary'] = $this->orders->staffTotals($member, $reference, $filters);
+        }
 
-        return Result::success(PaginationPayload::from($items, $rows->total(), $page, $rows->perPage())->toArray());
+        return Result::success($payload);
     }
 
     public function details(string $reference, int $member): Result
@@ -41,6 +45,14 @@ final class RemittanceOrderService
         $order = $this->orders->find($reference, $member);
 
         return $order === null ? Result::fail('订单不存在', 404) : Result::success($this->format($order, paymentDetails: true));
+    }
+
+    /** 员工按订单查看持久化的快照，不返回用户付款链接。 */
+    public function staffDetails(string $reference): Result
+    {
+        $order = $this->orders->find(strtolower($reference), null);
+
+        return $order === null ? Result::fail('订单不存在', 404) : Result::success($this->format($order, staff: true));
     }
 
     /** 先按本地绑定核对通知标识，资金状态以主动查询结果为准。 */
@@ -149,7 +161,13 @@ final class RemittanceOrderService
             }
         }
 
-        return $staff ? [...$result, 'member_id' => (string) $order->member_id, 'trade_id' => $order->provider_trade_id] : $result;
+        return $staff ? [
+            ...$result,
+            'member_id' => (string) $order->member_id,
+            'trade_id' => $order->provider_trade_id,
+            'payment_method' => $order->quote_snapshot['payment_method'] ?? null,
+            'payout_method' => $order->quote_snapshot['payout_method'] ?? null,
+        ] : $result;
     }
 
     public function statusLabel(RemittanceOrder $order): string

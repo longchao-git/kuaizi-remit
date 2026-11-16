@@ -77,6 +77,8 @@ Route::middleware('auth:sanctum')->prefix('admin/remittance')->group(function ()
         ->middleware(RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_RULES);
     Route::get('/orders', [RemittanceOrderController::class, 'index'])
         ->middleware(RequirePlatformPermission::class.':'.RemittancePermission::VIEW_ORDERS);
+    Route::get('/orders/{reference}', [RemittanceOrderController::class, 'show'])->whereUuid('reference')
+        ->middleware(RequirePlatformPermission::class.':'.RemittancePermission::VIEW_ORDERS);
     Route::post('/orders/{reference}/refresh', [RemittanceOrderController::class, 'refresh'])->whereUuid('reference')
         ->middleware([RequirePlatformPermission::class.':'.RemittancePermission::SYNC_ORDERS, 'throttle:15,1']);
     Route::middleware(RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_MATERIALS)->group(function () {

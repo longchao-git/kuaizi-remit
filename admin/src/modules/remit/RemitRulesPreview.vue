@@ -1,5 +1,5 @@
 <template>
-  <section class="rules-preview" aria-labelledby="remit-rules-title">
+  <section class="rules-preview" :class="{ 'is-connected': connected }" aria-labelledby="remit-rules-title">
     <h1 id="remit-rules-title">付款与到账规则</h1>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <el-button v-if="loadError || stale" :loading="busy" @click="loadRules">重新读取规则</el-button>
@@ -7,76 +7,88 @@
     <el-card shadow="never">
       <template #header><strong>付款规则</strong></template>
       <el-form label-position="top">
-        <el-form-item label="付款渠道">
-          <el-select v-model="paymentMethod" class="select">
-            <el-option v-for="(label, key) in paymentLabels" :key="key" :label="label" :value="key" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="用户通道费率（%）">
-          <el-input-number v-model="payment.rate" :min="0" :max="100" :precision="2" :step="0.01" />
-        </el-form-item>
-        <el-form-item label="显示付款提示">
-          <el-switch v-model="payment.noticeEnabled" aria-label="显示付款提示" />
-        </el-form-item>
-        <el-form-item label="付款提示（用 {费率} 引用当前费率）">
-          <el-input v-model="payment.notice" type="textarea" :rows="2" :maxlength="200" show-word-limit />
-        </el-form-item>
-        <el-form-item label="基础手续费（EUR）">
-          <el-input-number v-model="baseFee" :min="0" :max="10000" :precision="2" />
-        </el-form-item>
-        <el-form-item label="首单免基础手续费">
-          <el-switch v-model="firstOrderFree" />
-        </el-form-item>
-        <el-form-item v-if="connected" label="EUR → CNY 点差（%）">
-          <el-input-number v-model="spread" :min="0" :max="99.99" :precision="2" :step="0.01" />
-        </el-form-item>
+        <div class="payment-fields">
+          <el-form-item label="付款渠道">
+            <el-select v-model="paymentMethod" class="select">
+              <el-option v-for="(label, key) in paymentLabels" :key="key" :label="label" :value="key" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="用户通道费率（%）">
+            <el-input-number v-model="payment.rate" :min="0" :max="100" :precision="2" :step="0.01" />
+          </el-form-item>
+          <el-form-item label="显示付款提示">
+            <el-switch v-model="payment.noticeEnabled" aria-label="显示付款提示" />
+          </el-form-item>
+          <el-form-item class="payment-notice" label="付款提示（用 {费率} 引用当前费率）">
+            <el-input v-model="payment.notice" type="textarea" :rows="2" :maxlength="200" show-word-limit />
+          </el-form-item>
+          <el-form-item label="基础手续费（EUR）">
+            <el-input-number v-model="baseFee" :min="0" :max="10000" :precision="2" />
+          </el-form-item>
+          <el-form-item label="首单免基础手续费">
+            <el-switch v-model="firstOrderFree" />
+          </el-form-item>
+          <el-form-item v-if="connected" label="EUR → CNY 点差（%）">
+            <el-input-number v-model="spread" :min="0" :max="99.99" :precision="2" :step="0.01" />
+          </el-form-item>
+        </div>
         <el-button type="primary" :loading="busy" :disabled="quoting || Boolean(loadError) || payment.rate == null || baseFee == null || (connected && spread == null)" @click="savePayment">
           {{ connected ? '保存规则' : '保存演示付款规则' }}
         </el-button>
       </el-form>
     </el-card>
 
+    <section class="eta-section" aria-labelledby="eta-heading">
+      <header class="eta-heading">
+        <h2 id="eta-heading">预计到账规则</h2>
+        <el-button v-if="connected" type="primary" :loading="busy" :disabled="quoting || Boolean(loadError) || !canSaveEta" @click="saveRules">
+          保存 ETA 规则
+        </el-button>
+      </header>
+      <div class="eta-grid">
+        <el-card v-for="(rule, channel) in etaRules" :key="channel" shadow="never">
+          <template #header><h3>{{ payoutLabels[channel] }}规则</h3></template>
+          <el-form label-position="top">
+            <el-form-item label="金额分档阈值（EUR）">
+              <el-input-number v-model="rule.threshold" :min="0.01" :max="999999999" :precision="2" :step="100" />
+            </el-form-item>
+            <el-form-item label="低于阈值的预计到账提示">
+              <el-input v-model="rule.below" maxlength="80" />
+            </el-form-item>
+            <el-form-item label="达到或超过阈值的预计到账提示">
+              <el-input v-model="rule.atOrAbove" maxlength="80" />
+            </el-form-item>
+            <template v-if="connected">
+              <el-form-item v-for="(band, index) in rule.bands" :key="index" :label="`自定义区间 ${index + 1}`">
+                <div class="eta-band">
+                  <el-input-number v-model="band.from" :min="0" :max="999999999" :precision="2" :step="0.01" aria-label="下限（EUR，含）" placeholder="下限（含）" />
+                  <el-input-number v-model="band.until" :min="0.01" :max="999999999" :precision="2" :step="0.01" aria-label="上限（EUR，不含）" placeholder="无上限" />
+                  <el-input v-model.trim="band.label" maxlength="80" placeholder="预计到账提示" aria-label="区间预计到账提示" />
+                  <el-switch v-model="band.enabled" aria-label="启用该区间" />
+                  <el-button link type="danger" @click="rule.bands.splice(index, 1)">删除</el-button>
+                </div>
+              </el-form-item>
+              <div class="eta-add">
+                <el-button :disabled="rule.bands.length >= 10" @click="rule.bands.push({ from: undefined, until: undefined, label: '', enabled: true })">添加金额区间</el-button>
+                <span>自定义区间优先生效，未命中时使用上方的两档提示。</span>
+              </div>
+            </template>
+            <el-button v-else type="primary" :disabled="rule.threshold == null || !rule.below.trim() || !rule.atOrAbove.trim()" @click="saveEta(channel)">
+              保存演示到账规则
+            </el-button>
+          </el-form>
+        </el-card>
+      </div>
+    </section>
+
     <el-card shadow="never">
-      <template #header><strong>预计到账规则</strong></template>
+      <template #header><strong>报价预览</strong></template>
       <el-form label-position="top">
         <el-form-item label="人民币收款渠道">
           <el-select v-model="payoutMethod" class="select">
             <el-option v-for="(label, key) in payoutLabels" :key="key" :label="label" :value="key" />
           </el-select>
         </el-form-item>
-        <el-form-item label="金额分档阈值（EUR）">
-          <el-input-number v-model="eta.threshold" :min="0.01" :max="999999999" :precision="2" :step="100" />
-        </el-form-item>
-        <el-form-item label="低于阈值的预计到账提示">
-          <el-input v-model="eta.below" maxlength="80" />
-        </el-form-item>
-        <el-form-item label="达到或超过阈值的预计到账提示">
-          <el-input v-model="eta.atOrAbove" maxlength="80" />
-        </el-form-item>
-        <template v-if="connected">
-          <el-form-item v-for="(band, index) in eta.bands" :key="index" :label="`自定义区间 ${index + 1}`">
-            <div class="eta-band">
-              <el-input-number v-model="band.from" :min="0" :max="999999999" :precision="2" :step="0.01" aria-label="下限（EUR，含）" placeholder="下限（含）" />
-              <el-input-number v-model="band.until" :min="0.01" :max="999999999" :precision="2" :step="0.01" aria-label="上限（EUR，不含）" placeholder="无上限" />
-              <el-input v-model.trim="band.label" maxlength="80" placeholder="预计到账提示" aria-label="区间预计到账提示" />
-              <el-switch v-model="band.enabled" aria-label="启用该区间" />
-              <el-button link type="danger" @click="eta.bands.splice(index, 1)">删除</el-button>
-            </div>
-          </el-form-item>
-          <div class="eta-add">
-            <el-button :disabled="eta.bands.length >= 10" @click="eta.bands.push({ from: undefined, until: undefined, label: '', enabled: true })">添加金额区间</el-button>
-            <span>自定义区间优先生效，未命中时使用上方的两档提示。</span>
-          </div>
-        </template>
-        <el-button type="primary" :loading="busy" :disabled="quoting || Boolean(loadError) || eta.threshold == null || !eta.below.trim() || !eta.atOrAbove.trim()" @click="saveEta">
-          {{ connected ? '保存规则' : '保存演示到账规则' }}
-        </el-button>
-      </el-form>
-    </el-card>
-
-    <el-card shadow="never">
-      <template #header><strong>报价预览</strong></template>
-      <el-form label-position="top">
         <el-form-item label="汇款金额（EUR）">
           <el-input-number v-model="amount" :min="0.01" :max="999999999" :precision="2" :step="100" />
         </el-form-item>
@@ -140,6 +152,8 @@ const etaRules = reactive<Record<keyof typeof payoutLabels, {
 
 const payment = computed(() => paymentRules[paymentMethod.value])
 const eta = computed(() => etaRules[payoutMethod.value])
+const canSaveEta = computed(() => Object.values(etaRules)
+  .every(rule => rule.threshold != null && rule.below.trim() && rule.atOrAbove.trim()))
 const currency = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' })
 const endpoint = '/admin/remittance'
 const testRate = ref<number | undefined>(8.054)
@@ -337,11 +351,10 @@ function savePayment() {
   ElMessage.success('已保存到当前演示')
 }
 
-function saveEta() {
-  if (connected) return saveRules()
-  const { threshold, below, atOrAbove } = eta.value
+function saveEta(channel: keyof typeof payoutLabels) {
+  const { threshold, below, atOrAbove } = etaRules[channel]
   if (threshold == null || !below.trim() || !atOrAbove.trim()) return
-  emit('record', '保存到账规则', payoutLabels[payoutMethod.value], `金额分档 ${currency.format(threshold)}。 ${below} / ${atOrAbove}`)
+  emit('record', '保存到账规则', payoutLabels[channel], `金额分档 ${currency.format(threshold)}。 ${below} / ${atOrAbove}`)
   ElMessage.success('已保存到当前演示')
 }
 </script>
@@ -359,15 +372,26 @@ function saveEta() {
   font-size: 24px;
 }
 
+.rules-preview.is-connected { max-width: none; padding: 0; margin-bottom: 16px; }
+.payment-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 16px; align-items: start; }
+.payment-notice { grid-column: 1 / -1; }
+.eta-section { display: grid; gap: 12px; }
+.eta-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.eta-heading h2, .eta-grid h3 { margin: 0; font-size: 16px; }
+.eta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .select {
   max-width: 260px;
 }
 
-.eta-band { width: 100%; display: grid; grid-template-columns: 138px 138px minmax(140px, 1fr) auto auto; gap: 8px; align-items: center; }
+.eta-band { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; }
+.eta-band > .el-input { grid-column: 1 / -1; }
+.eta-band > .el-button { justify-self: start; }
 .eta-band .el-input-number { width: 100%; }
 .eta-add { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; color: var(--el-text-color-secondary); }
-@media (max-width: 780px) {
-  .eta-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .eta-band > .el-input { grid-column: 1 / -1; }
+@media (max-width: 950px) {
+  .eta-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 740px) {
+  .payment-fields { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
