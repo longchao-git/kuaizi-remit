@@ -17,7 +17,9 @@
 			"delay": 0
 		},
 		/* 模块配置 */
-		"modules": {},
+		"modules": {
+			"Camera": {}
+		},
 		/* 应用发布信息 */
 		"distribute": {
 			"splashscreen": {
@@ -31,14 +33,63 @@
 				"iosStyle": "storyboard",
 				"ios": {
 					"storyboard": "native-splash/ios/LaunchScreen.zip"
-				}
+				},
+				"useOriginalMsgbox": true
 			},
 			/* android打包配置 */
-			"android": {},
+			"android": {
+				"targetSdkVersion": 36,
+				"abiFilters": ["armeabi-v7a", "arm64-v8a"],
+				"permissionExternalStorage": {
+					"request": "none"
+				},
+				"permissionPhoneState": {
+					"request": "none"
+				},
+				"minSdkVersion": 26
+			},
 			/* ios打包配置 */
-			"ios": {},
+			"ios": {
+				"idfa": false,
+				"privacyDescription": {
+					"NSCameraUsageDescription": "筷子闪汇需要使用摄像头，以便你在汇款订单需要补件时拍摄并提交证明资料。",
+					"NSPhotoLibraryUsageDescription": "筷子闪汇需要访问相册，以便你选择要提交的汇款补件图片。"
+				}
+			},
 			/* SDK配置 */
-			"sdkConfigs": {}
+			"sdkConfigs": {},
+			"icons": {
+				"android": {
+					"hdpi": "native-icons/72x72.png",
+					"xhdpi": "native-icons/96x96.png",
+					"xxhdpi": "native-icons/144x144.png",
+					"xxxhdpi": "native-icons/192x192.png"
+				},
+				"ios": {
+					"appstore": "native-icons/app-icon-1024.png",
+					"ipad": {
+						"app": "native-icons/76x76.png",
+						"app@2x": "native-icons/152x152.png",
+						"notification": "native-icons/20x20.png",
+						"notification@2x": "native-icons/40x40.png",
+						"proapp@2x": "native-icons/167x167.png",
+						"settings": "native-icons/29x29.png",
+						"settings@2x": "native-icons/58x58.png",
+						"spotlight": "native-icons/40x40.png",
+						"spotlight@2x": "native-icons/80x80.png"
+					},
+					"iphone": {
+						"app@2x": "native-icons/120x120.png",
+						"app@3x": "native-icons/180x180.png",
+						"notification@2x": "native-icons/40x40.png",
+						"notification@3x": "native-icons/60x60.png",
+						"settings@2x": "native-icons/58x58.png",
+						"settings@3x": "native-icons/87x87.png",
+						"spotlight@2x": "native-icons/80x80.png",
+						"spotlight@3x": "native-icons/120x120.png"
+					}
+				}
+			}
 		}
 	},
 	/* 快应用特有相关 */

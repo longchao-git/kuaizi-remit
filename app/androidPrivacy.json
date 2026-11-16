@@ -1,0 +1,19 @@
+{
+    "version" : "1",
+    "prompt" : "template",
+    "title" : "筷子闪汇隐私政策",
+    "message" : "为提供账号、身份核验、汇款及客服服务，我们会在相应功能中处理必要的资料。相机和相册用于你主动拍摄或选择补件图片。请先阅读<a href=\"static/privacy.html\">《隐私政策》</a>，了解资料用途、接收方和你的权利。",
+    "buttonAccept" : "同意并继续",
+    "buttonRefuse" : "不同意",
+    "backToExit" : true,
+    "second" : {
+        "title" : "是否继续使用筷子闪汇",
+        "message" : "你可以再次阅读<a href=\"static/privacy.html\">《隐私政策》</a>，然后选择继续或退出应用。",
+        "buttonAccept" : "同意并继续",
+        "buttonRefuse" : "退出应用"
+    },
+    "disagreeMode" : {
+        "support" : false,
+        "loadNativePlugins" : false
+    }
+}

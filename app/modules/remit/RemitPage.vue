@@ -5,6 +5,7 @@
     :page-visible="pageVisible"
     :allow-local-login="localLoginEnabled"
     @back="closeLocalSession"
+    @privacy="showAgreement('privacy')"
   />
   <view
     v-else
@@ -865,6 +866,15 @@ async function verifyCode() {
 }
 
 function showAgreement(kind: "terms" | "privacy" | "rules") {
+  // #ifdef APP-PLUS || H5
+  if (kind === "privacy") {
+    uni.navigateTo({
+      url: "/modules/remit/RemitPrivacyPage",
+      fail: () => uni.showToast({ title: "无法打开隐私政策，请重试", icon: "none" }),
+    });
+    return;
+  }
+  // #endif
   const content = {
     terms: ["用户协议说明", "本地预览使用演示账号。正式使用前，请查阅上线时提供的用户协议。"],
     privacy: ["隐私说明", "预览中的手机号、客服内容和选取的补件资料仅用于本次设备上的操作演示。"],

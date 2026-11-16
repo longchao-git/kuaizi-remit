@@ -39,6 +39,12 @@
         <text>账号注销与记录</text>
         <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
       </button>
+      <!-- #ifdef APP-PLUS || H5 -->
+      <button class="card account-link" @tap="emit('privacy')">
+        <text>隐私政策</text>
+        <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
+      </button>
+      <!-- #endif -->
       <text v-if="error" class="hint offer" role="alert">{{ error }}</text>
       <button class="secondary account-logout" :disabled="busy" @tap="logout">退出登录</button>
     </view>
@@ -288,7 +294,7 @@ const accountLinks = computed(() => [
   { label: '账户安全', icon: '/static/remit/shield.svg', open: () => { settingsOpen.value = true; } },
 ]);
 
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{ back: []; privacy: [] }>();
 
 function selectTab(tab: SessionTab) {
   if (tab === activeTab.value) return;

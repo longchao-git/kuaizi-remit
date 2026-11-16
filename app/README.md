@@ -55,6 +55,15 @@ App 和小程序仍用 HBuilderX 打开 `app` 目录运行，交付前至少完�
 
 使用 HBuilderX 的「App 启动界面配置」核对路径并打包安装，再分别冷启动验证。普通运行基座的启动图由基座决定。参见 [DCloud 启动界面配置](https://uniapp.dcloud.net.cn/tutorial/app-splashscreen.html)。
 
+### 隐私提示、模块和 Google Play 打包
+
+- Android 原生提示读取 `androidPrivacy.json`，打开本地 `static/privacy.html`。Android、iOS 和 H5 的登录及账户设置也可打开这份联调版政策。正式发布前，补齐运营主体、隐私联系方式、资料保留期限与第三方清单，并发布为可公开访问的隐私政策网址。使用自定义基座或签名包清除数据后，测试首次启动、查看政策、同意和拒绝。参见 [DCloud Android 原生隐私提示](https://uniapp.dcloud.net.cn/tutorial/app-privacy-android.html)。
+- 一期启用 `Camera`（相机和相册），用于主动拍摄和选择补件图片。iOS 已配置摄像头和相册读取用途。相册写入、麦克风、定位和 Face ID 权限说明留空。PDF 走系统文档选择。短信由服务端发送，客服和站内消息走网络。雅本认证及付款通过 HTTPS 托管页面，HBuilderX 的实人认证、系统 Face ID、Messaging、OAuth 和 Payment 模块按现有接入方式留空。参见 [DCloud App 模块配置](https://uniapp.dcloud.net.cn/tutorial/app-modules.html)。
+- 推送走 UniPush 2.0。实际项目开通并配置 Google FCM 和 Apple APNs 后，再在 HBuilderX 开启相应推送模块，按本文的「App 系统推送」配置并真机验证。原生通知授权在验证正式编译包时单独检查。
+- Android 目标 API 设置为 `36`，最低 API 设置为 `26`，CPU 架构包含 `armeabi-v7a` 和 `arm64-v8a`。Android 和 iOS 的打包图标位于 `native-icons/`。URL Schemes 和 iOS Associated Domains 在接到正式回跳规范后配置。Android 启动时的存储和电话状态授权请求已关闭。首次正式打包选「GooglePlay(AAB)」，检查实际 AAB 的目标 API、64 位原生库的 16 KB 页对齐和最终合并的权限。安装包权限由引擎和 SDK 一并产生。参见 [Google Play 目标 API 要求](https://support.google.com/googleplay/android-developer/answer/11926878) 和 [Android 16 KB 页面支持](https://developer.android.com/guide/practices/page-sizes)。
+- Google Play 要求偶尔选图使用系统选择器。现有 uni-app App 选图走 `uni.chooseImage`。正式 AAB 如声明 `READ_MEDIA_IMAGES` 或 `READ_MEDIA_VIDEO`，需先验证系统选择器方案及补件上传，再移除广泛访问权限。参见 [Google Play 照片和视频权限](https://support.google.com/googleplay/android-developer/answer/14115180)。
+- 使用经验证的组织开发者账号提交汇款 App。Play Console 填写正式隐私政策链接、Data safety、审核人员登录方式、广告声明、目标受众、内容分级及金融功能声明（汇款类别为 Money transfer and wire services）。会员可在 App 内注册时，同时提供公开的站外注销申请入口，并核实后台最终执行和依法保留数据的处理流程。参见 [开发者账号要求](https://support.google.com/googleplay/android-developer/answer/10788890)、[送审配置](https://support.google.com/googleplay/android-developer/answer/9859455)、[账号删除要求](https://support.google.com/googleplay/android-developer/answer/13327111) 和 [金融功能声明](https://support.google.com/googleplay/android-developer/answer/13849271)。
+
 H5 也可以在命令行运行（uni-app Vue3 CLI，Node 24+）：
 
 ```bash
