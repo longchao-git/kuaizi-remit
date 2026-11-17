@@ -82,6 +82,26 @@
             <el-button v-if="canSupport" link type="primary" @click="openConversation(detail.id)">查看会话</el-button>
           </div>
         </el-card>
+        <el-card v-if="canViewOrders" class="remit-card recent-member-orders" shadow="never">
+          <template #header><h2>最近汇款订单</h2></template>
+          <el-alert v-if="ordersError" :title="ordersError" type="error" :closable="false" />
+          <el-table v-else v-loading="ordersLoading" :data="recentOrders" empty-text="暂无汇款订单">
+            <el-table-column label="订单号" min-width="260">
+              <template #default="{ row }">
+                <el-button link type="primary" :title="row.reference" @click="openOrder(row.reference)">
+                  {{ row.reference }}
+                </el-button>
+              </template>
+            </el-table-column>
+            <el-table-column label="汇款本金" min-width="120">
+              <template #default="{ row }">{{ euro.format(row.principal_minor / 100) }}</template>
+            </el-table-column>
+            <el-table-column prop="status_label" label="订单状态" min-width="130" />
+            <el-table-column label="创建时间（马德里）" min-width="170">
+              <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+            </el-table-column>
+          </el-table>
+        </el-card>
       </template>
     </div>
   </section>
@@ -93,7 +113,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getErrorMessage } from '@/utils/error'
-import { listMembers, sendMemberNotice, type MemberRow, type NoticeDraft } from './repository/remitOperationsRepository'
+import {
+  listMembers, listRecentMemberOrders, sendMemberNotice,
+  type MemberOrderSummary, type MemberRow, type NoticeDraft
+} from './repository/remitOperationsRepository'
 
 const router = useRouter()
 const route = useRoute()
@@ -105,6 +128,7 @@ const kycLabels: Record<string, string> = { '5001': '待认证', '5002': '审核
 const dateTime = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Europe/Madrid', dateStyle: 'short', timeStyle: 'short', hour12: false
 })
+const euro = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' })
 
 function kycStatus(member: MemberRow): string {
   if (!member.kyc_registered) return '未发起'
@@ -115,6 +139,9 @@ const selected = computed(() => typeof route.query.member === 'string' ? route.q
 const detail = ref<MemberRow>()
 const detailLoading = ref(false)
 const detailError = ref('')
+const recentOrders = ref<MemberOrderSummary[]>([])
+const ordersLoading = ref(false)
+const ordersError = ref('')
 const input = ref('')
 const page = ref(1)
 const total = ref(0)
@@ -150,6 +177,29 @@ function returnToMembers() {
 function openMemberOrders(member: string) {
   void router.push({ path: '/system/remittance/orders', query: { member_id: member } })
 }
+
+function openOrder(reference: string) {
+  void router.push({ path: '/system/remittance/orders', query: { order: reference, member_id: detail.value?.id } })
+}
+
+watch([() => detail.value?.id, canViewOrders], async ([member, allowed], _, onCleanup) => {
+  recentOrders.value = []
+  ordersError.value = ''
+  ordersLoading.value = false
+  if (!member || !allowed) return
+
+  let stale = false
+  onCleanup(() => { stale = true })
+  ordersLoading.value = true
+  try {
+    const orders = await listRecentMemberOrders(member)
+    if (!stale) recentOrders.value = orders
+  } catch (reason) {
+    if (!stale) ordersError.value = getErrorMessage(reason, '读取最近汇款订单失败')
+  } finally {
+    if (!stale) ordersLoading.value = false
+  }
+})
 
 watch(selected, async (member) => {
   const version = ++detailVersion
@@ -248,6 +298,7 @@ onMounted(() => void load(1))
 .member-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .member-detail { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 68px; align-items: start; }
 .member-detail :deep(.el-descriptions__content) { overflow-wrap: anywhere; }
+.recent-member-orders { grid-column: 1 / -1; }
 .member-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
 .member-actions .el-button + .el-button { margin-left: 0; }
 .member-pagination { margin-top: 12px; }

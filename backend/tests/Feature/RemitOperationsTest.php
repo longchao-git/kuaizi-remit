@@ -21,6 +21,23 @@ final class RemitOperationsTest extends TestCase
 
     private const ADMIN = '/api/admin/remittance';
 
+    public function test_quote_requests_do_not_consume_the_closure_submission_limit(): void
+    {
+        $this->loginAs(User::factory()->create());
+
+        for ($attempt = 0; $attempt < 6; $attempt++) {
+            $this->postJson('/api/app/remittance/quotes')->assertUnprocessable();
+        }
+
+        for ($attempt = 0; $attempt < 6; $attempt++) {
+            $this->postJson(self::MEMBER_CLOSURES)->assertOk()->assertJsonPath('data.status', 'pending');
+        }
+
+        $this->postJson(self::MEMBER_CLOSURES)->assertTooManyRequests();
+        $this->postJson('/api/app/remittance/quotes')->assertUnprocessable();
+        $this->assertDatabaseCount('member_closure_requests', 1);
+    }
+
     public function test_member_closure_is_idempotent_private_and_cannot_be_approved_with_unsettled_orders(): void
     {
         $member = User::factory()->create();

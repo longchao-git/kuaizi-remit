@@ -49,8 +49,10 @@ class MemberSessionTest extends TestCase
         // 先让发送限流窗口过期，生产环境才能命中 404 门禁。
         $this->travel(61)->seconds();
         $this->app->instance('env', 'production');
-        $this->postJson('/api/app/auth/sms-code', $mobile)->assertNotFound();
-        $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => $nextCode])->assertNotFound();
+        $this->postJson('/api/app/auth/sms-code', $mobile)
+            ->assertNotFound()->assertJsonPath('msg', '短信登录暂未开放');
+        $this->postJson('/api/app/auth/sms-login', $mobile + ['code' => $nextCode])
+            ->assertNotFound()->assertJsonPath('msg', '短信登录暂未开放');
         $this->withToken($first->json('data.token'))->getJson('/api/app/auth/current')->assertUnauthorized();
     }
 

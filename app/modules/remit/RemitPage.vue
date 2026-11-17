@@ -183,7 +183,6 @@
             {{ smsBusy ? "请稍候…" : "获取验证码" }}
           </button>
           <text v-if="demoEnabled" class="hint">演示流程 · 不会发送短信或创建账号</text>
-          <text v-else-if="smsLoginEnabled" class="hint">本地联调使用固定验证码</text>
           <button v-if="localLoginEnabled" class="text-button" @tap="localSessionOpen = true">使用测试账号</button>
         </view>
       </template>
@@ -208,7 +207,6 @@
             {{ remaining > 0 ? remaining + " 秒后可重新发送" : "重新发送验证码" }}
           </button>
           <text v-if="demoEnabled" class="hint">演示验证码 {{ demoCode }}</text>
-          <text v-else-if="smsLoginEnabled" class="hint">本地测试验证码 123456</text>
         </view>
         <view class="footer"
           ><text v-if="codeError" class="hint offer" role="alert">{{ codeError }}</text>
@@ -383,9 +381,11 @@ screen.value = 2;
 // #endif
 const startupScreen = screen.value;
 const localLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_LOGIN === 'true';
-const smsLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_SMS_LOGIN !== "false";
+const demoEnabled = import.meta.env.DEV
+  ? import.meta.env.VITE_REMIT_LOCAL_SMS_LOGIN === "false"
+  : import.meta.env.VITE_REMIT_DEMO === "true";
+const smsLoginEnabled = !demoEnabled;
 const smsAutofillEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_SMS_AUTOFILL !== "false";
-const demoEnabled = !smsLoginEnabled && (import.meta.env.DEV || import.meta.env.VITE_REMIT_DEMO === "true");
 const localSessionOpen = ref((localLoginEnabled || smsLoginEnabled) && sessionService.isLoggedIn());
 const localSession = ref<InstanceType<typeof RemitLocalSession>>();
 const pageVisible = ref(true);
@@ -806,10 +806,6 @@ async function requestCode() {
   const validMobile = smsLoginEnabled ? /^[67]\d{8}$/ : /^\d{9}$/;
   if (!validMobile.test(number) || !accepted.value) {
     error.value = accepted.value ? "请输入有效的西班牙手机号" : "请先阅读并同意协议";
-    return;
-  }
-  if (!smsLoginEnabled && !demoEnabled) {
-    error.value = "短信登录暂未开放";
     return;
   }
   refreshCountdown();

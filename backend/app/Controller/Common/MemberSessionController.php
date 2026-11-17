@@ -2,6 +2,8 @@
 
 namespace App\Controller\Common;
 
+use App\Common\ResponseResult;
+use App\Common\Result;
 use App\Controller\AbstractController;
 use App\Repository\System\UserRepository;
 use App\Service\System\MemberSessionService;
@@ -16,7 +18,9 @@ final class MemberSessionController extends AbstractController
 
     public function sendSms(Request $request, MemberSessionService $sessions, SmsCodeService $codes): JsonResponse
     {
-        abort_unless($sessions->localSmsEnabled(), 404);
+        if (! $sessions->localSmsEnabled()) {
+            return $this->smsUnavailable();
+        }
         $input = $request->validate(['mobile' => ['required', 'string', self::SPANISH_MOBILE]]);
 
         try {
@@ -30,7 +34,9 @@ final class MemberSessionController extends AbstractController
 
     public function loginSms(Request $request, MemberSessionService $sessions): JsonResponse
     {
-        abort_unless($sessions->localSmsEnabled(), 404);
+        if (! $sessions->localSmsEnabled()) {
+            return $this->smsUnavailable();
+        }
         $input = $request->validate([
             'mobile' => ['required', 'string', self::SPANISH_MOBILE],
             'code' => ['required', 'string', 'regex:/^[0-9]{6}$/D'],
@@ -66,5 +72,11 @@ final class MemberSessionController extends AbstractController
         $users->revokeSession($request->user()->currentAccessToken());
 
         return $this->success(true);
+    }
+
+    /** 保持未开放端点的 HTTP 状态，并让 App 显示可理解的原因。 */
+    private function smsUnavailable(): JsonResponse
+    {
+        return ResponseResult::json(Result::fail('短信登录暂未开放', 404), 404);
     }
 }
