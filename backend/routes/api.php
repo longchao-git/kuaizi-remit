@@ -13,6 +13,7 @@ use App\Controller\Admin\Platform\RemittanceQuoteRecordController;
 use App\Controller\Admin\Platform\RemittanceRuleController;
 use App\Controller\Admin\Platform\SessionController;
 use App\Controller\Admin\Platform\StatusReasonController;
+use App\Controller\Common\AgreementController;
 use App\Controller\Common\HealthController;
 use App\Controller\Common\MemberClosureController;
 use App\Controller\Common\MemberDraftController;
@@ -35,6 +36,8 @@ use App\Permission\RemittancePermission;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class)->name('api.health');
+Route::get('/app/agreements/{kind}', [AgreementController::class, 'show'])
+    ->whereIn('kind', ['terms', 'privacy']);
 Route::post('/callbacks/yaband/remit/{event}', YabandRemitCallbackController::class)->whereIn('event', ['transaction', 'kyc']);
 
 Route::post('/user/login', [SessionController::class, 'login'])->middleware('throttle:10,1,remit-platform-login:');
@@ -63,6 +66,9 @@ Route::middleware('auth:sanctum')->prefix('admin/remittance')->group(function ()
     Route::get('/rules', [RemittanceRuleController::class, 'show']);
     Route::put('/rules', [RemittanceRuleController::class, 'update']);
     Route::put('/operations', [RemittanceRuleController::class, 'updateOperations'])->middleware('throttle:30,1,remit-operations-update:');
+    Route::post('/agreements/{kind}', [AgreementController::class, 'publish'])
+        ->whereIn('kind', ['terms', 'privacy'])
+        ->middleware([RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_RULES, 'throttle:15,1,remit-agreement-publish:']);
     Route::get('/rules/revisions', [RemittanceRuleController::class, 'revisions']);
     Route::prefix('reconciliation')->middleware(RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_RECONCILIATION)->group(function () {
         Route::get('/', [ReconciliationController::class, 'index']);

@@ -68,6 +68,7 @@ final class SessionController extends AbstractController
             ]],
             ['system', '系统管理', [
                 ['remittance-operations', '运营配置', 'remittance/operations', RemittancePermission::MANAGE_RULES],
+                ['remittance-agreements', '协议管理', 'remittance/agreements', RemittancePermission::MANAGE_RULES],
                 ['remittance-staff', '员工角色', 'remittance/staff', PlatformRoles::MANAGE_ACCESS],
                 ['remittance-audit', '操作审计', 'remittance/audit', PlatformRoles::MANAGE_ACCESS],
             ]],

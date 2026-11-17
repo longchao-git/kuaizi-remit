@@ -4,6 +4,7 @@ type LazyComp = () => Promise<unknown>
 export const componentMap: Record<string, LazyComp> = {
   'remittance/rules': () => import('@/modules/remit/RemitRulesPage.vue'),
   'remittance/operations': () => import('@/modules/remit/RemitOperationsPage.vue'),
+  'remittance/agreements': () => import('@/modules/remit/RemitAgreementsPage.vue'),
   'remittance/reconciliation': () => import('@/modules/remit/RemitReconciliationPage.vue'),
   'remittance/dashboard': () => import('@/modules/remit/RemitDashboardPage.vue'),
   'remittance/closures': () => import('@/modules/remit/RemitClosuresPage.vue'),

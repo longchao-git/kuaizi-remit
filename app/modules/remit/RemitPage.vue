@@ -863,10 +863,10 @@ async function verifyCode() {
 
 function showAgreement(kind: "terms" | "privacy" | "rules") {
   // #ifdef APP-PLUS || H5
-  if (kind === "privacy") {
+  if (kind !== "rules") {
     uni.navigateTo({
-      url: "/modules/remit/RemitPrivacyPage",
-      fail: () => uni.showToast({ title: "无法打开隐私政策，请重试", icon: "none" }),
+      url: "/modules/remit/RemitPrivacyPage?kind=" + kind,
+      fail: () => uni.showToast({ title: "无法打开协议，请重试", icon: "none" }),
     });
     return;
   }
