@@ -36,8 +36,11 @@ final class YabandMaterialRequestRepository extends AbstractRepository
         $task->forceFill(['submission_id' => (string) Str::uuid(), 'submission_hash' => $hash])->saveOrFail();
     }
 
-    public function saveStatus(YabandMaterialRequest $task, string $status): void
+    public function saveStatus(YabandMaterialRequest $task, string $status, bool $submissionConfirmed): void
     {
-        $task->forceFill(['status' => $status])->saveOrFail();
+        $task->forceFill([
+            'status' => $status,
+            'submission_hash' => $submissionConfirmed ? $task->submission_hash : null,
+        ])->saveOrFail();
     }
 }

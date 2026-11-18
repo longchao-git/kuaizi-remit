@@ -73,6 +73,40 @@ final class YabandRemitWorkflowTest extends TestCase
         $this->assertSame(['doc_id' => $first['request_id'], 'media_type' => 'pdf', 'attachment' => base64_encode($pdf)], $first['document'][0]);
     }
 
+    public function test_material_task_closes_on_upstream_expiration_or_completion_without_confirming_submission(): void
+    {
+        $member = User::factory()->create();
+        $operator = User::factory()->create(['is_platform_staff' => true, 'platform_role' => 'operations']);
+        $this->link($member);
+        $this->bindSigner();
+        Http::fake(['*/api/materials/update' => Http::sequence()
+            ->push(['status' => false, 'code' => -1032, 'message' => 'Question expired'])
+            ->push(['status' => false, 'code' => '-1033', 'message' => 'Question completed'])]);
+
+        foreach (['6003' => '雅本补件任务已过期', '6002' => '雅本补件任务已完成，请刷新查看'] as $status => $message) {
+            $this->asToken($operator, 'platform', [RemittancePermission::MANAGE_MATERIALS]);
+            $reference = $this->postJson('/api/admin/remittance/materials', [
+                'member_id' => $member->id,
+                'question_id' => 'fixture-qno-'.$status,
+                'instruction' => '补交资金来源',
+                'deadline_at' => now()->addHour()->timestamp,
+            ])->assertOk()->json('data.reference');
+
+            $this->asToken($member);
+            $submit = '/api/app/remittance/materials/'.$reference;
+            $fields = ['reply' => '已补资料'];
+            $this->postJson($submit, $fields)->assertConflict()->assertJsonPath('msg', $message);
+            $tasks = $this->getJson('/api/app/remittance/materials')->assertOk()->json('data.list');
+            $task = collect($tasks)->firstWhere('reference', $reference);
+            $this->assertSame((string) $status, $task['status']);
+            $this->assertFalse($task['can_submit']);
+            $this->postJson($submit, $fields)->assertConflict();
+        }
+
+        $sends = Http::recorded(fn (Request $request) => str_ends_with($request->url(), '/api/materials/update'));
+        $this->assertCount(2, $sends);
+    }
+
     public function test_kyc_notice_keeps_signed_nested_string_and_notifies_only_on_state_change(): void
     {
         $member = User::factory()->create();

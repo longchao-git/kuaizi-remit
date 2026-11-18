@@ -100,12 +100,23 @@ final class MemberMaterialService
             $documents = $file === null ? [] : [
                 ['doc_id' => $task->submission_id, 'media_type' => $media, 'attachment' => $encoded],
             ];
-            $response = $this->yaband->submitMaterials($task->submission_id, $task->question_id, $reply, $documents);
+            try {
+                $response = $this->yaband->submitMaterials($task->submission_id, $task->question_id, $reply, $documents);
+            } catch (YabandException $error) {
+                $status = match ($error->upstreamCode) {
+                    -1032 => '6003',
+                    -1033 => '6002',
+                    default => throw $error,
+                };
+                $this->tasks->saveStatus($task, $status, submissionConfirmed: false);
+
+                return Result::fail($status === '6003' ? '雅本补件任务已过期' : '雅本补件任务已完成，请刷新查看', 409);
+            }
             $status = $response['qno_status_code'] ?? null;
             if (($response['qno'] ?? null) !== $task->question_id || ! in_array($status, ['6002', '6003'], true)) {
                 return Result::fail('补件结果待确认，请使用原资料重试', 502);
             }
-            $this->tasks->saveStatus($task, $status);
+            $this->tasks->saveStatus($task, $status, submissionConfirmed: $status === '6002');
 
             return $status === '6002' ? Result::success($this->present($task)) : Result::fail('雅本补件任务已过期', 409);
         } catch (YabandException|LockTimeoutException) {
