@@ -10,11 +10,11 @@
       前往身份验证
     </button>
     <button v-if="url" class="inline-action accent" :disabled="busy" @tap="launch">打开雅本验证页</button>
-    <button v-if="status?.can_submit_profile && !status?.kyc_passed && status?.profile_status_code !== '3002'"
+    <button v-if="canEditProfile"
       class="inline-action accent" :disabled="busy" @tap="profileOpen = !profileOpen">
       {{ profileOpen ? '收起身份资料' : '填写身份资料' }}
     </button>
-    <view v-if="profileOpen" class="card status-card profile-form">
+    <view v-if="canEditProfile && profileOpen" class="card status-card profile-form">
       <input v-model="profile.first_name" placeholder="名" maxlength="64" />
       <input v-model="profile.last_name" placeholder="姓" maxlength="64" />
       <input v-model="profile.nationality" placeholder="国籍代码，如 CN" maxlength="2" />
@@ -85,6 +85,9 @@ const idvLabels: Record<string, string> = {
 };
 const heading = computed(() => status.value ? (kycLabels[status.value.kyc_status_code ?? ''] ?? '身份认证') : '身份认证');
 const idvLabel = computed(() => idvLabels[status.value?.idv_status_code ?? ''] ?? '待查询');
+const canEditProfile = computed(() => Boolean(
+  status.value?.can_submit_profile && !status.value.kyc_passed && status.value.profile_status_code !== '3002',
+));
 
 async function run(action: () => Promise<void>) {
   if (busy.value) return;
@@ -138,6 +141,7 @@ function selectGender(event: { detail: { value: string | number } }) {
 }
 
 function submitProfile() {
+  if (!canEditProfile.value) return;
   void run(async () => {
     const { address, ...identity } = profile;
     const required = [...Object.values(identity), address.country, address.address_line1, address.post_code, address.city];
@@ -156,6 +160,12 @@ function submitProfile() {
   });
 }
 
+watch(canEditProfile, (allowed) => {
+  if (!allowed) {
+    profileOpen.value = false;
+    Object.assign(profile, newProfile());
+  }
+});
 watch(() => props.pageVisible, (visible) => { if (visible) refresh(); });
 onMounted(refresh);
 </script>

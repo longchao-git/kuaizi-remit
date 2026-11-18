@@ -79,6 +79,8 @@ docker exec -it kuaizi-remit-api php artisan remit:create-admin admin@kuaizi.loc
 
 `YABAND_REMIT_BASE_URL`、`YABAND_REMIT_MID`、`YABAND_REMIT_PASSWORD` 使用雅本开通的汇款 API 配置。认证入口另需 `YABAND_REMIT_KYC_REDIRECT_URL`、`YABAND_REMIT_KYC_NOTIFY_URL` 和 `YABAND_REMIT_EXTERNAL_UID_PREFIX`。同一项目环境使用固定前缀，开户重试复用本地已保存的请求编号。正式启用需要按汇款项目签名规范注册 `YabandRemitSigner` 实现。接口范围和沙箱待提供项见 [汇款对接说明](../docs/business/remit-integration.md#laravel-与雅本接口对应)。
 
+本机沙箱可使用被 Git 忽略的 `.env.yaband-sandbox` 保存接入地址、MID、密码和 `YABAND_REMIT_SECRET_KEY`。在本地沙箱环境设置 `APP_KEY` 和 `CACHE_STORE=array`，从本目录运行 `php artisan remit:check-yaband --env=yaband-sandbox`，可验证 Token 并查看请求签名和回调验签组件的配置状态。若 Windows 便携 PHP 缺少 CA 文件，可用 `php -d curl.cainfo=<受信任的 CA 文件>` 执行同一命令。
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

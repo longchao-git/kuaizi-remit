@@ -40,6 +40,23 @@ final class YabandRemitClientTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_connection_check_reports_signing_readiness_without_showing_credentials(): void
+    {
+        config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
+        $this->fakeLogin(['fixture-token']);
+
+        $this->artisan('remit:check-yaband')
+            ->expectsOutput('雅本 Token 鉴权通过。')
+            ->expectsOutput('签名密钥：已配置')
+            ->expectsOutput('请求签名：待实现')
+            ->expectsOutput('回调验签：待实现')
+            ->doesntExpectOutputToContain('fixture-token')
+            ->doesntExpectOutputToContain('fixture-signing-secret')
+            ->doesntExpectOutputToContain('fixture-api-password')
+            ->assertSuccessful();
+        Http::assertSentCount(1);
+    }
+
     public function test_kyc_and_payment_follow_documented_paths_and_preserve_nested_json_strings(): void
     {
         $this->app->instance(YabandRemitSigner::class, new class implements YabandRemitSigner
