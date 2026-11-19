@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Model\System\User;
 use App\Permission\PlatformRoles;
+use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
+use App\Service\Remittance\Yaband\YabandRemitHmacSigner;
 use App\Service\Sms\LogSmsChannel;
 use App\Service\Sms\NullSmsChannel;
 use App\Service\Sms\SmsChannel;
@@ -22,6 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $secretKey = config('yaband_remit.secret_key');
+        if (is_string($secretKey) && trim($secretKey) !== '') {
+            $this->app->singleton(
+                YabandRemitSigner::class,
+                static fn (): YabandRemitSigner => new YabandRemitHmacSigner($secretKey),
+            );
+        }
         $this->app->singleton(SmsChannel::class, static function (): SmsChannel {
             return match ((string) config('remit.sms.channel')) {
                 'log' => new LogSmsChannel,

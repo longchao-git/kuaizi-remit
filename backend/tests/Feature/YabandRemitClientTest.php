@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Model\System\User;
+use App\Providers\AppServiceProvider;
+use App\Service\Remittance\Yaband\Contract\YabandRemitCallbackVerifier;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
 use App\Service\Remittance\Yaband\YabandException;
 use App\Service\Remittance\Yaband\YabandRemitClient;
@@ -43,18 +45,42 @@ final class YabandRemitClientTest extends TestCase
     public function test_connection_check_reports_signing_readiness_without_showing_credentials(): void
     {
         config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
+        $this->app->register(AppServiceProvider::class, true);
         $this->fakeLogin(['fixture-token']);
 
         $this->artisan('remit:check-yaband')
             ->expectsOutput('雅本 Token 鉴权通过。')
             ->expectsOutput('签名密钥：已配置')
-            ->expectsOutput('请求签名：待实现')
+            ->expectsOutput('请求签名：已注册')
             ->expectsOutput('回调验签：待实现')
             ->doesntExpectOutputToContain('fixture-token')
             ->doesntExpectOutputToContain('fixture-signing-secret')
             ->doesntExpectOutputToContain('fixture-api-password')
             ->assertSuccessful();
         Http::assertSentCount(1);
+    }
+
+    public function test_configured_signer_is_used_by_the_normal_client_without_enabling_callback_verification(): void
+    {
+        config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
+        $this->app->register(AppServiceProvider::class, true);
+        $this->assertFalse($this->app->bound(YabandRemitCallbackVerifier::class));
+        $this->fakeLogin(['fixture-token']);
+        Http::fake(['*/api/kyc/query' => Http::response([
+            'status' => true, 'code' => 200, 'data' => ['uid' => '1001', 'kyc_status_code' => '5001'],
+        ])]);
+
+        app(YabandRemitClient::class)->queryKyc('fixture-request', '1001');
+
+        Http::assertSent(function (Request $request): bool {
+            if (! str_ends_with($request->url(), '/api/kyc/query')) {
+                return false;
+            }
+            $canonical = 'mid=fixture-mid&request_id=fixture-request&time='.$request['time'].'&type=kyc&user={"uid":"1001"}';
+
+            return $request->hasHeader('Authorization', 'Bearer fixture-token')
+                && $request['sign'] === hash_hmac('sha256', $canonical, 'fixture-signing-secret');
+        });
     }
 
     public function test_kyc_and_payment_follow_documented_paths_and_preserve_nested_json_strings(): void
