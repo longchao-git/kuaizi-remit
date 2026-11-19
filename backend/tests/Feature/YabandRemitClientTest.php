@@ -11,6 +11,7 @@ use App\Service\Remittance\Yaband\YabandRemitClient;
 use App\Service\Remittance\Yaband\YabandTransport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -60,6 +61,110 @@ final class YabandRemitClientTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_unreadable_cached_token_is_replaced_before_a_signed_request(): void
+    {
+        $this->fakeLogin(['first-token', 'replacement-token']);
+        $transport = app(YabandTransport::class);
+        $this->assertSame('first-token', $transport->token());
+        $cacheKey = 'yaband-remit:bearer:'.hash('sha256', 'https://remit.example.test|fixture-mid');
+        Cache::put($cacheKey, 'invalid-encrypted-cache', 60);
+
+        $this->assertSame('replacement-token', $transport->token());
+        $this->assertSame('replacement-token', $transport->token());
+        Http::assertSentCount(2);
+    }
+
+    public function test_a_token_for_a_different_merchant_is_never_cached(): void
+    {
+        Http::fake(['*/api/auth/login' => Http::response([
+            'status' => true, 'code' => 200, 'data' => [
+                'token' => 'wrong-merchant-token', 'token_type' => 'bearer', 'expires_in' => 120,
+                'expires_at' => now()->addMinutes(2)->timestamp, 'merchant' => ['mid' => 'other-mid'],
+            ],
+        ])]);
+
+        try {
+            app(YabandTransport::class)->token();
+            $this->fail('Expected the token merchant to be checked.');
+        } catch (YabandException $error) {
+            $this->assertSame('雅本 Token 响应的商户编号不匹配。', $error->getMessage());
+        }
+        $cacheKey = 'yaband-remit:bearer:'.hash('sha256', 'https://remit.example.test|fixture-mid');
+        $this->assertNull(Cache::get($cacheKey));
+    }
+
+    public function test_large_numeric_user_identifiers_are_preserved_when_creating_a_member(): void
+    {
+        config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
+        $this->app->register(AppServiceProvider::class, true);
+        $this->fakeLogin(['fixture-token']);
+        Http::fake(['*/api/kyc/new' => Http::response(
+            '{"status":true,"code":200,"data":{"user":{"uid":9223372036854775808,"external_uid":"member-fixture"}}}',
+            200, ['Content-Type' => 'application/json'],
+        )]);
+
+        $uid = app(YabandRemitClient::class)->createMember('fixture-request', 'https://app.example.test/notify', [
+            'external_uid' => 'member-fixture', 'email' => 'member@example.test',
+        ]);
+        $this->assertSame('9223372036854775808', $uid);
+    }
+
+    public function test_signed_responses_from_a_different_merchant_or_business_are_rejected(): void
+    {
+        config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
+        $this->app->register(AppServiceProvider::class, true);
+        $this->fakeLogin(['fixture-token']);
+        Http::fake(['*/api/kyc/query' => Http::sequence()
+            ->push(['status' => true, 'code' => 200, 'data' => ['mid' => 'other-mid', 'uid' => '1001']])
+            ->push(['status' => true, 'code' => 200, 'data' => ['mid' => 'fixture-mid', 'type' => 'transaction', 'uid' => '1001']])]);
+
+        foreach (['雅本响应的商户编号不匹配。', '雅本响应的业务类型不匹配。'] as $message) {
+            try {
+                app(YabandRemitClient::class)->queryKyc('fixture-request', '1001');
+                $this->fail('Expected the mismatched response to be rejected.');
+            } catch (YabandException $error) {
+                $this->assertSame($message, $error->getMessage());
+            }
+        }
+    }
+
+    public function test_member_creation_cannot_bind_another_external_user(): void
+    {
+        config([
+            'yaband_remit.secret_key' => 'fixture-signing-secret',
+            'yaband_remit.kyc_redirect_url' => 'https://app.example.test/return',
+            'yaband_remit.kyc_notify_url' => 'https://app.example.test/notify',
+            'yaband_remit.external_uid_prefix' => 'fixture',
+        ]);
+        $this->app->register(AppServiceProvider::class, true);
+        $this->fakeLogin(['fixture-token']);
+        Http::fake(['*/api/kyc/new' => Http::response([
+            'status' => true, 'code' => 200,
+            'data' => ['user' => ['uid' => '1001', 'external_uid' => 'another-member']],
+        ])]);
+
+        $member = User::factory()->create();
+        $this->withToken($member->createToken('member')->plainTextToken)
+            ->postJson('/api/app/kyc/idv')->assertStatus(502);
+        $this->assertDatabaseHas('yaband_remit_members', ['member_id' => $member->id, 'uid' => null]);
+        Http::assertNotSent(fn (Request $request) => str_ends_with($request->url(), '/api/kyc/idv'));
+    }
+
+    public function test_idv_cannot_open_a_session_returned_for_another_user(): void
+    {
+        config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
+        $this->app->register(AppServiceProvider::class, true);
+        $this->fakeLogin(['fixture-token']);
+        Http::fake(['*/api/kyc/idv' => Http::response([
+            'status' => true, 'code' => 200,
+            'data' => ['url' => 'https://idv.example.test/session', 'user' => ['uid' => '1002']],
+        ])]);
+
+        $this->expectException(YabandException::class);
+        $this->expectExceptionMessage('雅本身份验证响应的用户编号不匹配。');
+        app(YabandRemitClient::class)->startIdv('fixture-request', '1001', 'https://app.example.test/return', 'https://app.example.test/notify');
+    }
+
     public function test_configured_signer_is_used_by_the_normal_client_without_enabling_callback_verification(): void
     {
         config(['yaband_remit.secret_key' => 'fixture-signing-secret']);
@@ -67,7 +172,8 @@ final class YabandRemitClientTest extends TestCase
         $this->assertFalse($this->app->bound(YabandRemitCallbackVerifier::class));
         $this->fakeLogin(['fixture-token']);
         Http::fake(['*/api/kyc/query' => Http::response([
-            'status' => true, 'code' => 200, 'data' => ['uid' => '1001', 'kyc_status_code' => '5001'],
+            'status' => true, 'code' => 200,
+            'data' => ['mid' => 'fixture-mid', 'type' => 'kyc', 'uid' => '1001', 'kyc_status_code' => '5001'],
         ])]);
 
         app(YabandRemitClient::class)->queryKyc('fixture-request', '1001');
@@ -96,7 +202,7 @@ final class YabandRemitClientTest extends TestCase
         $fake = static fn (array $data) => Http::response(['status' => true, 'code' => '200', 'data' => $data]);
         Http::fake([
             '*/api/kyc/new' => $fake(['user' => ['uid' => 1000000001]]),
-            '*/api/kyc/idv' => $fake(['url' => 'https://idv.example.test/session']),
+            '*/api/kyc/idv' => $fake(['url' => 'https://idv.example.test/session', 'user' => ['uid' => 1000000001]]),
             '*/api/kyc/query' => $fake([
                 'uid' => 1000000001, 'user_status_code' => '1001', 'remit_status_code' => '4002',
                 'kyc_status_code' => '5002', 'idv_status_code' => '2006', 'profile_status_code' => '3001',

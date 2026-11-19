@@ -3,6 +3,7 @@
 namespace App\Service\Remittance\Yaband;
 
 use Illuminate\Container\Attributes\Singleton;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -29,7 +30,12 @@ final class YabandTransport
         return Cache::lock($key.':lock', 20)->block(12, function () use ($key, $mid): string {
             $cached = Cache::get($key);
             if (is_string($cached)) {
-                return Crypt::decryptString($cached);
+                try {
+                    return Crypt::decryptString($cached);
+                } catch (DecryptException) {
+                    // 密钥轮换或缓存损坏时，在同一把锁内重新获取 Token。
+                    Cache::forget($key);
+                }
             }
 
             $password = config('yaband_remit.password');
@@ -45,6 +51,12 @@ final class YabandTransport
             if (! is_string($token) || ! preg_match('/^[A-Za-z0-9._~+\/-]+=*$/D', $token) || ! is_int($expiresIn)
                 || ! is_int($expiresAt) || ! is_string($tokenType) || strtolower($tokenType) !== 'bearer') {
                 throw new YabandException('雅本汇款 Token 响应格式无效。');
+            }
+            if (is_array($data['merchant'] ?? null) && array_key_exists('mid', $data['merchant'])) {
+                $responseMid = $data['merchant']['mid'];
+                if ((! is_string($responseMid) && ! is_int($responseMid)) || (string) $responseMid !== $mid) {
+                    throw new YabandException('雅本 Token 响应的商户编号不匹配。');
+                }
             }
 
             $ttl = min($expiresIn, $expiresAt - now()->timestamp);
@@ -72,7 +84,7 @@ final class YabandTransport
         } catch (ConnectionException) {
             throw new YabandException('无法连接雅本汇款 API。');
         }
-        $body = $response->json();
+        $body = $response->json(flags: JSON_BIGINT_AS_STRING);
         if (! $response->successful() || ! is_array($body) || ($body['status'] ?? null) !== true
             || ! in_array($body['code'] ?? null, [200, '200'], true) || ! is_array($body['data'] ?? null)) {
             $rawCode = is_array($body) ? ($body['code'] ?? null) : null;

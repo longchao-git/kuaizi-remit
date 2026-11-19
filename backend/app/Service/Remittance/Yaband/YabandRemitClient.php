@@ -19,6 +19,10 @@ final class YabandRemitClient
         if ((! is_string($uid) && ! is_int($uid)) || trim((string) $uid) === '' || strlen((string) $uid) > 64) {
             throw new YabandException('雅本开户响应缺少有效的用户编号。');
         }
+        if (array_key_exists('external_uid', $data['user'])
+            && $data['user']['external_uid'] !== ($user['external_uid'] ?? null)) {
+            throw new YabandException('雅本开户响应的会员编号不匹配。');
+        }
 
         return (string) $uid;
     }
@@ -28,6 +32,12 @@ final class YabandRemitClient
         $data = $this->send('/api/kyc/idv', [
             ...$this->kycUser($requestId, $uid), 'redirect_url' => $redirectUrl, 'notify_url' => $notifyUrl,
         ]);
+        if (is_array($data['user'] ?? null) && array_key_exists('uid', $data['user'])) {
+            $responseUid = $data['user']['uid'];
+            if ((! is_string($responseUid) && ! is_int($responseUid)) || (string) $responseUid !== $uid) {
+                throw new YabandException('雅本身份验证响应的用户编号不匹配。');
+            }
+        }
         $url = $data['url'] ?? null;
         if (! is_string($url) || ! filter_var($url, FILTER_VALIDATE_URL) || parse_url($url, PHP_URL_SCHEME) !== 'https'
             || parse_url($url, PHP_URL_USER) !== null) {
@@ -108,6 +118,17 @@ final class YabandRemitClient
             throw new YabandException('雅本汇款请求签名为空。');
         }
 
-        return $this->transport->post($path, [...$body, 'sign' => $sign], $this->transport->token());
+        $response = $this->transport->post($path, [...$body, 'sign' => $sign], $this->transport->token());
+        if (array_key_exists('mid', $response)) {
+            $responseMid = $response['mid'];
+            if ((! is_string($responseMid) && ! is_int($responseMid)) || (string) $responseMid !== $body['mid']) {
+                throw new YabandException('雅本响应的商户编号不匹配。');
+            }
+        }
+        if (isset($data['type']) && array_key_exists('type', $response) && $response['type'] !== $data['type']) {
+            throw new YabandException('雅本响应的业务类型不匹配。');
+        }
+
+        return $response;
     }
 }

@@ -15,13 +15,13 @@
       {{ profileOpen ? '收起身份资料' : '填写身份资料' }}
     </button>
     <view v-if="canEditProfile && profileOpen" class="card status-card profile-form">
-      <input v-model="profile.first_name" placeholder="名" maxlength="64" />
-      <input v-model="profile.last_name" placeholder="姓" maxlength="64" />
-      <input v-model="profile.nationality" placeholder="国籍代码，如 CN" maxlength="2" />
+      <input v-model="profile.first_name" placeholder="名" maxlength="64" :disabled="busy" />
+      <input v-model="profile.last_name" placeholder="姓" maxlength="64" :disabled="busy" />
+      <input v-model="profile.nationality" placeholder="国籍代码，如 CN" maxlength="2" :disabled="busy" />
       <picker :range="documentTypes" range-key="label" :disabled="busy" @change="selectDocument">
         <view class="profile-option">{{ documentTypes.find(item => item.value === profile.id_type)?.label ?? '请选择证件类型' }}</view>
       </picker>
-      <input v-model="profile.id_number" placeholder="证件号码" maxlength="64" />
+      <input v-model="profile.id_number" placeholder="证件号码" maxlength="64" :disabled="busy" />
       <picker mode="date" :value="profile.expiry_date" :disabled="busy" @change="profile.expiry_date = String($event.detail.value)">
         <view class="profile-option">{{ profile.expiry_date || '证件有效期至' }}</view>
       </picker>
@@ -31,11 +31,11 @@
       <picker :range="genders" range-key="label" :disabled="busy" @change="selectGender">
         <view class="profile-option">{{ genders.find(item => item.value === profile.gender)?.label ?? '请选择性别' }}</view>
       </picker>
-      <input v-model="profile.address.country" placeholder="居住国家代码，如 ES" maxlength="2" />
-      <input v-model="profile.address.address_line1" placeholder="居住地址" maxlength="64" />
-      <input v-model="profile.address.address_line2" placeholder="补充地址（选填）" maxlength="64" />
-      <input v-model="profile.address.post_code" placeholder="邮政编码" maxlength="64" />
-      <input v-model="profile.address.city" placeholder="城市" maxlength="64" />
+      <input v-model="profile.address.country" placeholder="居住国家代码，如 ES" maxlength="2" :disabled="busy" />
+      <input v-model="profile.address.address_line1" placeholder="居住地址" maxlength="64" :disabled="busy" />
+      <input v-model="profile.address.address_line2" placeholder="补充地址（选填）" maxlength="64" :disabled="busy" />
+      <input v-model="profile.address.post_code" placeholder="邮政编码" maxlength="64" :disabled="busy" />
+      <input v-model="profile.address.city" placeholder="城市" maxlength="64" :disabled="busy" />
       <button class="primary" :disabled="busy" @tap="submitProfile">提交身份资料</button>
     </view>
     <button class="inline-action accent" :disabled="busy" @tap="refresh">{{ busy ? '处理中…' : '查询认证进度' }}</button>

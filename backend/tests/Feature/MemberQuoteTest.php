@@ -21,6 +21,7 @@ class MemberQuoteTest extends TestCase
 
     public function test_locked_rate_is_persisted_only_from_a_server_adapter_and_is_not_a_draft(): void
     {
+        $this->freezeTime();
         $this->app->make(RemittanceRuleRepository::class)->save('quote', [
             'base_fee_minor' => 599, 'first_order_free' => false,
             'payment' => ['card' => ['basis_points' => 80]],
