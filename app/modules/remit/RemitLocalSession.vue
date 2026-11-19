@@ -33,13 +33,17 @@
       v-else-if="chatOpen" :live="live" :messages="messages" :sending="sending" :status="status"
       :send="send" @refresh="refresh()"
     />
-    <view v-else-if="settingsOpen" class="body account-content">
+    <view v-else-if="settingsOpen" class="body account-content settings-content">
       <text class="account-section-title">账户与安全</text>
       <button class="card account-link" @tap="closureOpen = true">
         <text>账号注销与记录</text>
         <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
       </button>
       <!-- #ifdef APP-PLUS || H5 -->
+      <button class="card account-link" @tap="emit('terms')">
+        <text>用户协议</text>
+        <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
+      </button>
       <button class="card account-link" @tap="emit('privacy')">
         <text>隐私政策</text>
         <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
@@ -294,7 +298,7 @@ const accountLinks = computed(() => [
   { label: '账户安全', icon: '/static/remit/shield.svg', open: () => { settingsOpen.value = true; } },
 ]);
 
-const emit = defineEmits<{ back: []; privacy: [] }>();
+const emit = defineEmits<{ back: []; terms: []; privacy: [] }>();
 
 function selectTab(tab: SessionTab) {
   if (tab === activeTab.value) return;
@@ -759,6 +763,9 @@ onMounted(() => {
   margin-bottom: 16rpx;
   color: #6d7180;
   font-size: 24rpx;
+}
+.settings-content .account-link + .account-link {
+  margin-top: 16rpx;
 }
 .account-logout {
   width: 100%;

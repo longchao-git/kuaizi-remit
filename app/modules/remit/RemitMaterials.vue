@@ -105,6 +105,9 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (reason) {
+    if (!active) {
+      return;
+    }
     if (reason instanceof UnauthorizedError) emit('expired');
     else error.value = reason instanceof Error ? reason.message : '补件操作失败，请重试';
   } finally {
@@ -112,18 +115,23 @@ async function run(action: () => Promise<void>) {
   }
 }
 
+async function refreshTasks(next: number) {
+  const result = await request.get<{ list: Task[]; page: number; total_pages: number }>(path, { page: next }, options);
+  if (!active) {
+    return;
+  }
+  items.value = result.list;
+  page.value = result.page;
+  pages.value = result.total_pages;
+  if (selected.value && !result.list.some(task => task.reference === selected.value && task.can_submit)) {
+    selected.value = '';
+    replaceFile();
+    reply.value = '';
+  }
+}
+
 function load(next: number) {
-  return run(async () => {
-    const result = await request.get<{ list: Task[]; page: number; total_pages: number }>(path, { page: next }, options);
-    items.value = result.list;
-    page.value = result.page;
-    pages.value = result.total_pages;
-    if (selected.value && !result.list.some(task => task.reference === selected.value && task.can_submit)) {
-      selected.value = '';
-      replaceFile();
-      reply.value = '';
-    }
-  });
+  return run(() => refreshTasks(next));
 }
 
 function select(task: Task) {
@@ -226,14 +234,18 @@ function upload(url: string, path: string, message: string): Promise<Task> {
       header: { Authorization: 'Bearer ' + sessionService.getToken() },
       success(response) {
         if (response.statusCode === 401) {
-          if (active) emit('expired');
-          reject(new Error('登录已过期'));
+          reject(new UnauthorizedError());
           return;
         }
         try {
           const result = JSON.parse(response.data) as { code: number; msg: string; data: Task };
-          if (result.code === 0) resolve(result.data);
-          else reject(new Error(result.msg || '补件提交失败'));
+          if (result.code === 401) {
+            reject(new UnauthorizedError(result.msg));
+          } else if (response.statusCode >= 200 && response.statusCode < 300 && result.code === 0) {
+            resolve(result.data);
+          } else {
+            reject(new Error(result.msg || '补件提交失败'));
+          }
         } catch {
           reject(new Error('补件返回格式异常'));
         }
@@ -258,6 +270,18 @@ function submit(task: Task) {
         replaceFile();
         reply.value = '';
       }
+    } catch (reason) {
+      if (active && !(reason instanceof UnauthorizedError)) {
+        try {
+          await refreshTasks(page.value);
+        } catch (refreshError) {
+          if (refreshError instanceof UnauthorizedError) {
+            throw refreshError;
+          }
+          // 刷新失败时保留提交错误和原资料，供用户重试。
+        }
+      }
+      throw reason;
     } finally {
       uploadInProgress = undefined;
       if (!active) release(attachment);

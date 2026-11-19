@@ -5,6 +5,7 @@
     :page-visible="pageVisible"
     :allow-local-login="localLoginEnabled"
     @back="closeLocalSession"
+    @terms="showAgreement('terms')"
     @privacy="showAgreement('privacy')"
   />
   <view

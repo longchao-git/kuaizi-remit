@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
 import { makeMessageId } from './useSupportChat';
 
@@ -73,6 +73,7 @@ const error = ref('');
 const page = ref(1);
 const pages = ref(0);
 let pending: { key: string; id: string } | undefined;
+let active = true;
 
 async function run(action: () => Promise<void>) {
   if (busy.value) return;
@@ -81,6 +82,9 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (reason) {
+    if (!active) {
+      return;
+    }
     if (reason instanceof UnauthorizedError) emit('expired');
     else error.value = reason instanceof Error ? reason.message : '操作失败，请重试';
   } finally {
@@ -124,8 +128,8 @@ function submit() {
 }
 
 function back(): boolean {
-  if (busy.value) return true;
   if (!detail.value && !editing.value) return false;
+  if (busy.value) return true;
   if (detail.value) load(page.value);
   detail.value = undefined;
   editing.value = false;
@@ -138,6 +142,9 @@ onMounted(() => {
   if (props.initialTicket) open(props.initialTicket);
   else if (props.orderReference) editing.value = true;
   else load(1);
+});
+onUnmounted(() => {
+  active = false;
 });
 </script>
 
