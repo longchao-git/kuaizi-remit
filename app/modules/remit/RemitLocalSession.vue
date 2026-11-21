@@ -1,7 +1,10 @@
 <template>
   <view class="remit" data-mode="local-session" :data-screen="chatOpen ? 36 : undefined">
     <view v-if="!member || subPageOpen || profileOpen" class="top session-top">
-      <button v-if="showBack" class="back-hit" role="button" tabindex="0" aria-label="返回" @tap="back">
+      <button
+        v-if="showBack" class="back-hit" role="button" tabindex="0" aria-label="返回"
+        :disabled="Boolean(confirmation) && busy" @tap="back"
+      >
         <image class="round-icon" src="/static/remit/back.svg" mode="aspectFit" />
       </button>
       <text>{{ pageTitle }}</text>
@@ -19,6 +22,17 @@
       <view class="phone card"><input v-model="password" password placeholder="请输入密码" aria-label="密码" /></view>
     </view>
 
+    <RemitOrderConfirmation
+      v-else-if="confirmation"
+      :quote="confirmation.quote"
+      :account-label="confirmation.account.label"
+      :busy="busy"
+      :error="error"
+      :page-visible="props.pageVisible"
+      @confirm="submitOrder"
+      @account="confirmOrder(confirmation.quote)"
+      @edit="back"
+    />
     <RemitCoupons v-else-if="couponsOpen" @select="selectCoupon" @expired="expire" />
     <RemitDrafts v-else-if="draftsOpen" @resume="resumeDraft" @expired="expire" />
     <RemitOrders
@@ -179,6 +193,7 @@ import RemitCoupons from './RemitCoupons.vue';
 import RemitCouponOffer from './RemitCouponOffer.vue';
 import RemitDrafts, { type RemitDraft } from './RemitDrafts.vue';
 import RemitOrders from './RemitOrders.vue';
+import RemitOrderConfirmation from './RemitOrderConfirmation.vue';
 import RemitMaterials from './RemitMaterials.vue';
 import RemitTickets from './RemitTickets.vue';
 import RemitKyc from './RemitKyc.vue';
@@ -188,6 +203,8 @@ import { pendingNotice, syncMemberPush } from './memberPush';
 
 interface QuoteEstimate {
   record_no: string;
+  principal_minor: number;
+  payment_method: 'sepa' | 'applePay' | 'card';
   mode: 'local_estimate' | 'locked';
   can_submit: boolean;
   expires_at?: number;
@@ -210,6 +227,7 @@ const amount = ref('100');
 const paymentMethod = ref<'sepa' | 'applePay' | 'card'>('sepa');
 const payoutMethod = ref<'bank' | 'wechat'>('bank');
 const quote = ref<QuoteEstimate>();
+const confirmation = ref<{ quote: QuoteEstimate; account: { reference: string; label: string } }>();
 const busy = ref(false);
 const inboxOpen = ref(false);
 const targetNotice = ref<string>();
@@ -246,7 +264,7 @@ let announcementRequest = 0;
 
 const subPageOpen = computed(() =>
   inboxOpen.value || chatOpen.value || helpOpen.value || couponsOpen.value || draftsOpen.value || ordersOpen.value || ticketsOpen.value ||
-  kycOpen.value || materialsOpen.value || closureOpen.value || settingsOpen.value,
+  kycOpen.value || materialsOpen.value || closureOpen.value || settingsOpen.value || Boolean(confirmation.value),
 );
 const onHome = computed(() => Boolean(member.value) && !subPageOpen.value && !profileOpen.value);
 const onCouponHome = computed(() => onHome.value && props.pageVisible);
@@ -263,6 +281,9 @@ type SessionTab = (typeof sessionTabs)[number]['key'];
 const activeTab = computed<SessionTab>(() => ordersOpen.value ? 'orders' : profileOpen.value ? 'profile' : 'home');
 
 const pageTitle = computed(() => {
+  if (confirmation.value) {
+    return '确认汇款';
+  }
   if (chatOpen.value) return '筷子闪汇客服';
   if (helpOpen.value) return '帮助与客服';
   if (couponsOpen.value) return '我的优惠券';
@@ -309,7 +330,16 @@ function selectTab(tab: SessionTab) {
 }
 
 function back() {
-  if (homeOffer.value && onCouponHome.value) {
+  if (confirmation.value) {
+    if (busy.value) {
+      return;
+    }
+    if (!confirmation.value.quote.expires_at || confirmation.value.quote.expires_at * 1000 <= Date.now()) {
+      quote.value = undefined;
+    }
+    confirmation.value = undefined;
+    error.value = '';
+  } else if (homeOffer.value && onCouponHome.value) {
     dismissHomeOffer();
   } else if (chatOpen.value) {
     chatOpen.value = false;
@@ -499,6 +529,7 @@ function openNoticeOrder(reference: string) {
 watch([amount, paymentMethod, payoutMethod, selectedCoupon], () => {
   quoteRevision++;
   quote.value = undefined;
+  confirmation.value = undefined;
   error.value = '';
 }, { flush: 'sync' });
 
@@ -520,6 +551,7 @@ function clearSession() {
   sessionService.clearAuthSession();
   member.value = undefined;
   quote.value = undefined;
+  confirmation.value = undefined;
   inboxOpen.value = false;
   inboxCount.value = 0;
   targetNotice.value = undefined;
@@ -618,17 +650,27 @@ function confirmOrder(locked: QuoteEstimate) {
     const index = await choosePayout(accounts.map(account => account.label));
     const account = index === undefined ? undefined : accounts[index];
     if (!account || quote.value?.record_no !== locked.record_no) return;
-    const confirmed = await new Promise<boolean>(resolve => uni.showModal({
-      title: '确认汇款订单',
-      content: account.label + '，合计支付 €' + formatAmount(locked.total_payable_minor),
-      confirmText: '确认下单',
-      success: ({ confirm }) => resolve(confirm),
-      fail: () => resolve(false),
-    }));
-    if (!confirmed || quote.value?.record_no !== locked.record_no) return;
+    if (locked.expires_at * 1000 <= Date.now()) {
+      throw new Error('锁汇已过期，请重新报价');
+    }
+    confirmation.value = { quote: { ...locked }, account: { ...account } };
+  });
+}
+
+function submitOrder() {
+  return perform(async () => {
+    const selected = confirmation.value;
+    if (!selected || quote.value?.record_no !== selected.quote.record_no) {
+      return;
+    }
+    const locked = selected.quote;
+    if (locked.mode !== 'locked' || !locked.can_submit || !locked.expires_at || locked.expires_at * 1000 <= Date.now()) {
+      throw new Error('报价已过期，请返回重新报价');
+    }
     const order = await request.post<{ reference: string }>('app/remittance/orders', {
-      quote_reference: locked.record_no, payout_account: account.reference,
-    }, options);
+      quote_reference: locked.record_no, payout_account: selected.account.reference,
+    }, { handleUnauthorized: false });
+    confirmation.value = undefined;
     returnOrder.value = order.reference;
     orderDetail.value = true;
     ordersOpen.value = true;
