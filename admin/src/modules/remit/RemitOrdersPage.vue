@@ -129,7 +129,7 @@
         <el-card shadow="never" class="order-list order-fees remit-card">
           <template #header><h2>费用与定价明细</h2></template>
           <el-descriptions class="remit-details" :column="1" size="small" border>
-            <el-descriptions-item label="成交汇率">
+            <el-descriptions-item label="报价汇率">
               {{ typeof detail.quote?.rate_ten_thousandths === 'number' ? (detail.quote.rate_ten_thousandths / 10000).toFixed(4) : '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="手续费">{{ amount(serviceFee(detail.quote), currency) }}</el-descriptions-item>

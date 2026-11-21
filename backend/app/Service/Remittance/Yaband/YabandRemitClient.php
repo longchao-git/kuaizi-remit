@@ -85,11 +85,17 @@ final class YabandRemitClient
         return $this->send($this->transactionPath('payment', $whiteLabel), [...$data, 'type' => 'transaction', 'pay_method' => 'online']);
     }
 
+    /** 查询机构或白标交易，并核对交易内的商户归属后交给订单服务同步。 */
     public function queryTransaction(string $requestId, string $tradeId, bool $whiteLabel): array
     {
-        return $this->send($this->transactionPath('query', $whiteLabel), [
+        $response = $this->send($this->transactionPath('query', $whiteLabel), [
             'type' => 'transaction', 'request_id' => $requestId, 'trade_id' => $tradeId,
         ]);
+        if (is_array($response['transaction_info'] ?? null)) {
+            $this->assertMerchant($response['transaction_info']);
+        }
+
+        return $response;
     }
 
     public function updateInstitutionTransfer(array $data): array
@@ -119,16 +125,23 @@ final class YabandRemitClient
         }
 
         $response = $this->transport->post($path, [...$body, 'sign' => $sign], $this->transport->token());
-        if (array_key_exists('mid', $response)) {
-            $responseMid = $response['mid'];
-            if ((! is_string($responseMid) && ! is_int($responseMid)) || (string) $responseMid !== $body['mid']) {
-                throw new YabandException('雅本响应的商户编号不匹配。');
-            }
-        }
+        $this->assertMerchant($response);
         if (isset($data['type']) && array_key_exists('type', $response) && $response['type'] !== $data['type']) {
             throw new YabandException('雅本响应的业务类型不匹配。');
         }
 
         return $response;
+    }
+
+    /** 响应携带商户编号时须匹配当前配置；拒绝其他商户或类型错误的编号。 */
+    private function assertMerchant(array $response): void
+    {
+        if (! array_key_exists('mid', $response)) {
+            return;
+        }
+        $responseMid = $response['mid'];
+        if ((! is_string($responseMid) && ! is_int($responseMid)) || (string) $responseMid !== $this->transport->merchantId()) {
+            throw new YabandException('雅本响应的商户编号不匹配。');
+        }
     }
 }

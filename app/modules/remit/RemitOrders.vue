@@ -16,7 +16,10 @@
         <view class="line"><text>下单时间</text><text>{{ new Date(detail.created_at).toLocaleString() }}</text></view>
         <view class="line"><text>汇款本金</text><text>€{{ formatAmount(detail.principal_minor) }}</text></view>
         <template v-if="detail.quote">
-          <view class="line"><text>成交汇率</text><text>1 EUR = {{ (detail.quote.rate_ten_thousandths / 10000).toFixed(4) }} CNY</text></view>
+          <view class="line">
+            <text>报价汇率</text>
+            <text>1 EUR = {{ (detail.quote.rate_ten_thousandths / 10000).toFixed(4) }} CNY</text>
+          </view>
           <view v-if="detail.quote.base_fee_minor !== undefined" class="line"><text>汇款手续费</text><text>€{{ formatAmount(detail.quote.base_fee_minor) }}</text></view>
           <view v-if="detail.quote.discount_minor" class="line"><text>优惠减免</text><text>−€{{ formatAmount(detail.quote.discount_minor) }}</text></view>
           <view v-if="detail.quote.channel_fee_minor !== undefined" class="line"><text>付款通道费</text><text>€{{ formatAmount(detail.quote.channel_fee_minor) }}</text></view>

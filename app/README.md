@@ -49,6 +49,14 @@ uni.scss
 
 App 和小程序仍用 HBuilderX 打开 `app` 目录运行，交付前至少完成一次目标平台运行和发行构建。
 
+### 当前测试与保密要求（2026-11-21）
+
+筷子闪汇当前只做 Android、iOS App；下文保留的 H5/小程序模板说明不代表新增交付目标。当前仅向指定测试人员私下分发，不公开上架 Apple App Store 或 Google Play，不开放公开测试、预注册或公开邀请链接。正式公开发布须由项目负责人另行确认。
+
+iOS 可使用 TestFlight 指定邮箱邀请测试；Android 可使用签名 APK 定向交付，或 Google Play 内部测试的指定账号名单。采用商店测试渠道也须先获授权、准备账号及签名资料；本次没有上传或修改任何商店配置。参见 [Apple 测试邀请](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/) 和 [Google Play 内部测试](https://support.google.com/googleplay/android-developer/answer/9845334)。测试包和项目截图不公开传播。
+
+雅本确认 sandbox 的 IDV 为真实身份及活体认证，付款会真实扣款，下发也是真实资金到账。测试域名不代表模拟资金环境。只读查询和本地验证可以继续；真实身份认证、付款、下发、退款须使用已确认的测试人员和本人账户，并单独确认具体测试操作。
+
 ### App 原生启动图
 
 资产位于 `native-splash/`。Android 使用 480×762、720×1242、1080×1882 三档 `.9.png`，iOS 使用包含 `LaunchScreen.storyboard` 和两档 PNG 的 `LaunchScreen.zip`。`manifest.json` 已按项目内相对路径配置。Android 和 iOS 安装包从原生启动界面直接进入业务入口，H5 演示保留品牌启动页。

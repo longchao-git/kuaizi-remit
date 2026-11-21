@@ -113,6 +113,61 @@ final class RemittanceOrderTest extends TestCase
             && $request['data']['trade_id'] === $trade && $request->hasHeader('Authorization', 'Bearer test-token'));
     }
 
+    public function test_query_rejects_foreign_or_invalid_nested_merchant_without_changing_orders_or_notices(): void
+    {
+        config(['broadcasting.default' => 'log']);
+        config(['yaband_remit.base_url' => 'https://sandbox.example.test', 'yaband_remit.mid' => '900001', 'yaband_remit.password' => 'test-password']);
+        $this->app->instance(YabandRemitSigner::class, new class implements YabandRemitSigner
+        {
+            public function sign(string $path, array $payload): string
+            {
+                return 'test-signature';
+            }
+        });
+        Http::preventStrayRequests();
+        $member = User::factory()->create();
+        $operator = User::factory()->create(['is_platform_staff' => true, 'platform_role' => 'operations']);
+        $this->withToken($operator->createToken('platform', [RemittancePermission::SYNC_ORDERS])->plainTextToken);
+
+        foreach ([false, true] as $whiteLabel) {
+            $reference = $this->seedOrder($member);
+            DB::table('remittance_orders')->where('reference', $reference)->update(['white_label' => $whiteLabel]);
+            $path = '/api/admin/remittance/orders/'.$reference.'/refresh';
+            $state = [
+                'order_id' => $reference, 'trade_id' => 'trade-'.$reference,
+                'income_status_code' => '00', 'outgoing_status_code' => '05', 'refund_status_code' => '00',
+            ];
+            $replies = Http::sequence();
+            foreach (['900002', 900002, null, ['900001'], 900001, '900001'] as $mid) {
+                $replies->push($this->providerReply([
+                    'mid' => '900001', 'transaction_info' => [...$state, 'mid' => $mid],
+                ]));
+            }
+            $queryPath = $whiteLabel ? '/api/whitelable/transaction/query' : '/api/transaction/query';
+            Http::fake([
+                'https://sandbox.example.test/api/auth/login' => Http::response($this->providerReply([
+                    'token' => 'test-token', 'expires_in' => 3600, 'expires_at' => now()->addHour()->timestamp, 'token_type' => 'Bearer',
+                ])),
+                'https://sandbox.example.test'.$queryPath => $replies,
+            ]);
+            $notices = $whiteLabel ? 1 : 0;
+            for ($attempt = 0; $attempt < 4; $attempt++) {
+                $this->postJson($path)->assertServiceUnavailable();
+                $this->assertDatabaseHas('remittance_orders', [
+                    'reference' => $reference, 'income_code' => '03', 'outgoing_code' => '01', 'provider_checked_at' => null,
+                ]);
+                $this->assertDatabaseCount('member_notifications', $notices);
+            }
+            $this->postJson($path)->assertOk()->assertJsonPath('data.status_label', '已下发');
+            $this->assertDatabaseHas('remittance_orders', [
+                'reference' => $reference, 'income_code' => '00', 'outgoing_code' => '05',
+            ]);
+            $this->assertDatabaseCount('member_notifications', $notices + 1);
+            $this->postJson($path)->assertOk();
+            $this->assertDatabaseCount('member_notifications', $notices + 1);
+        }
+    }
+
     public function test_order_notice_links_only_owned_orders_and_preserves_idempotency_and_read_state(): void
     {
         config(['broadcasting.default' => 'log']);
