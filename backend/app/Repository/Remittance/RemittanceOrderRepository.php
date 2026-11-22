@@ -89,12 +89,46 @@ final class RemittanceOrderRepository extends AbstractRepository
 
     public function hasUnsettled(int $member): bool
     {
-        return $this->query()->where('member_id', $member)->where(function ($query) {
+        return $this->unsettled($this->query()->where('member_id', $member))->exists();
+    }
+
+    /** 未结清的状态口径与注销检查一致，包含退款失败及下发失败后待退款的订单。 */
+    private function unsettled(Builder $query): Builder
+    {
+        return $query->where(function ($query) {
             $query->whereNotIn('refund_code', ['00', '04'])
                 ->orWhere(fn ($order) => $order->where('refund_code', '00')
                     ->whereNotIn('income_code', ['05', '06', '07', '08'])
                     ->where(fn ($state) => $state->where('income_code', '!=', '00')->orWhere('outgoing_code', '!=', '05')));
-        })->exists();
+        });
+    }
+
+    /** 按最久未尝试的顺序选择待同步订单，失败记录同样参与间隔和排序。 */
+    public function dueForSync(DateTimeInterface $before, int $limit): Collection
+    {
+        return $this->syncDueQuery($before)
+            ->orderByRaw('COALESCE(provider_sync_attempted_at, provider_checked_at, created_at) ASC')
+            ->orderBy('id')->limit($limit)->get(['reference']);
+    }
+
+    /** 获取单订单锁后再次确认，避免批次选中后回调或其他进程已经更新订单。 */
+    public function isSyncDue(RemittanceOrder $order, DateTimeInterface $before): bool
+    {
+        return $this->syncDueQuery($before)->whereKey($order->getKey())->exists();
+    }
+
+    private function syncDueQuery(DateTimeInterface $before): Builder
+    {
+        return $this->unsettled($this->query())->whereNotNull('provider_trade_id')->where('provider_trade_id', '!=', '')
+            ->where('created_at', '<=', $before)
+            ->where(fn ($query) => $query->whereNull('provider_sync_attempted_at')->orWhere('provider_sync_attempted_at', '<=', $before))
+            ->where(fn ($query) => $query->whereNull('provider_checked_at')->orWhere('provider_checked_at', '<=', $before));
+    }
+
+    /** 在持有单订单锁时记录尝试，不把请求失败伪装成状态已核实。 */
+    public function markSyncAttempt(RemittanceOrder $order): void
+    {
+        $order->forceFill(['provider_sync_attempted_at' => now()])->saveOrFail();
     }
 
     /**

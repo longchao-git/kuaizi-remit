@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $outgoing_code
  * @property string $refund_code
  * @property Carbon|null $provider_checked_at
+ * @property Carbon|null $provider_sync_attempted_at
  * @property Carbon $created_at
  */
 #[Fillable(['quote_reference', 'reference', 'member_id', 'white_label', 'quote_snapshot', 'principal_minor', 'payment_request_id',
@@ -35,6 +36,7 @@ final class RemittanceOrder extends Model
             'white_label' => 'boolean',
             'principal_minor' => 'integer',
             'provider_checked_at' => 'datetime',
+            'provider_sync_attempted_at' => 'datetime',
             'quote_snapshot' => 'array',
             'payment_url' => 'encrypted',
         ];

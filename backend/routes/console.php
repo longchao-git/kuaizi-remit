@@ -43,3 +43,7 @@ Artisan::command('remit:check-yaband', function (YabandTransport $transport): in
 })->purpose('检查雅本汇款 Token 鉴权与签名组件的配置状态');
 
 Schedule::command('remit:send-due-reminders')->everyMinute()->withoutOverlapping(30);
+
+if (config('yaband_remit.order_sync.enabled') === true) {
+    Schedule::command('remit:sync-orders')->everyMinute()->withoutOverlapping(60);
+}

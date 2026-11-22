@@ -81,6 +81,16 @@ docker exec -it kuaizi-remit-api php artisan remit:create-admin admin@kuaizi.loc
 
 本机沙箱可使用被 Git 忽略的 `.env.yaband-sandbox` 保存接入地址、MID、密码和 `YABAND_REMIT_SECRET_KEY`。在本地沙箱环境设置 `APP_KEY` 和 `CACHE_STORE=array`，从本目录运行 `php artisan remit:check-yaband --env=yaband-sandbox`，可验证 Token 并查看请求签名和回调验签组件的配置状态。若 Windows 便携 PHP 缺少 CA 文件，可用 `php -d curl.cainfo=<受信任的 CA 文件>` 执行同一命令。
 
+### 漏通知后的订单查询补偿
+
+升级先执行 `php artisan migrate`，增加 `provider_sync_attempted_at`。它记录最近的查单尝试，失败也记录；`provider_checked_at` 仍只代表已经成功核实的状态时间。已有数据不改写资金状态。
+
+配置已完成查询联调的雅本环境后，可执行 `php artisan remit:sync-orders --limit=10`，只查询已有雅本交易编号的未结清订单，补齐付款、下发及退款状态。已下发、已退款、未付款终态订单和未取得交易编号的订单不在周期查询范围内；已保存交易编号的订单仍可通过后台单笔主动查单。它不创建支付、不执行下发或退款。失败时继续处理本批其他订单，命令返回非零并在日志记录订单引用和错误码，不输出上游正文或凭据。
+
+自动查询默认关闭。部署迁移、确认签名和查单可用并配置 Laravel Scheduler 后，设置 `YABAND_REMIT_ORDER_SYNC_ENABLED=true`；每分钟调度一次，按订单退避间隔和批量上限执行，任务禁止重叠。默认同笔间隔 300 秒（允许 60–86400），每批 10 笔（允许 1–100），可分别用 `YABAND_REMIT_ORDER_SYNC_INTERVAL_SECONDS`、`YABAND_REMIT_ORDER_SYNC_BATCH_SIZE` 调整。配置错误会拒绝执行。失败订单也等待间隔，并按最久未尝试的顺序轮询；后台单笔查单和通过验签的通知不受这个周期限制，仍使用同一订单锁和归属校验。上线使用共享的持久化缓存锁，勿用 `array` 缓存运行多进程任务。
+
+补偿任务不能代替真实通知验签及真实付款、到账、退款联调。雅本已说明 sandbox 付款会真实扣款，IDV 也使用真实身份；当前仅向指定人员私下交付测试版本，不公开上架苹果或谷歌商店。
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

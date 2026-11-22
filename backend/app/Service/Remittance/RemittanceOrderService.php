@@ -11,6 +11,7 @@ use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\YabandException;
 use App\Service\Remittance\Yaband\YabandRemitClient;
+use DateTimeInterface;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\DatabaseManager;
@@ -74,6 +75,18 @@ final class RemittanceOrderService
     /** 查询已有雅本交易，核对订单、交易及返回的会员归属后保存三条独立状态。 */
     public function refresh(string $reference): Result
     {
+        return $this->refreshOrder($reference);
+    }
+
+    /** 补偿任务仅查询到期的未结清订单；锁内发现已更新或结清时返回 null。 */
+    public function refreshIfDue(string $reference, DateTimeInterface $before): ?Result
+    {
+        return $this->refreshOrder($reference, $before);
+    }
+
+    /** 复用单订单锁，先记录尝试，再校验上游结果并同步资金状态。 */
+    private function refreshOrder(string $reference, ?DateTimeInterface $before = null): ?Result
+    {
         $reference = strtolower($reference);
         $lock = Cache::lock('remittance-order:'.$reference, 40);
         if (! $lock->get()) {
@@ -85,10 +98,14 @@ final class RemittanceOrderService
             if ($order === null) {
                 return Result::fail('订单不存在', 404);
             }
-            if ($order->provider_trade_id === null) {
+            if ($before !== null && ! $this->orders->isSyncDue($order, $before)) {
+                return null;
+            }
+            if ($order->provider_trade_id === null || $order->provider_trade_id === '') {
                 return Result::fail('订单尚未取得雅本交易编号', 409);
             }
 
+            $this->orders->markSyncAttempt($order);
             $reply = $this->yaband->queryTransaction((string) Str::uuid(), $order->provider_trade_id, $order->white_label);
             $transaction = $reply['transaction_info'] ?? null;
             if (! is_array($transaction) || ($transaction['order_id'] ?? null) !== $order->reference
