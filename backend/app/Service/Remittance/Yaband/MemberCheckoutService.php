@@ -23,6 +23,7 @@ use RuntimeException;
 #[Singleton]
 final class MemberCheckoutService
 {
+    /** 复用报价、会员资格同步和订单持久化，支付前不依赖旧认证快照。 */
     public function __construct(
         private RemittanceQuoteRecordRepository $quotes,
         private RemittanceOrderRepository $orders,
@@ -31,6 +32,7 @@ final class MemberCheckoutService
         private RemittanceCouponRepository $coupons,
         private MemberClosureRepository $closures,
         private DatabaseManager $database,
+        private MemberKycService $kyc,
     ) {}
 
     /** 查询结算适配器提供的本人账户，用于下单确认时选择。 */
@@ -72,16 +74,33 @@ final class MemberCheckoutService
         }
         try {
             $order = $this->orders->getForQuote((int) $member->id, $quoteReference);
-            if (! is_int($snapshot['expires_at'] ?? null) || $snapshot['expires_at'] <= now()->timestamp) {
+            if ($this->quoteExpired($snapshot)) {
                 return $order?->provider_trade_id !== null
                     ? Result::success(['reference' => $order->reference, 'payment_url' => null])
                     : Result::fail('锁汇已过期，请重新报价', 409);
             }
             $link = $this->members->findFor((int) $member->id);
+            if ($link?->uid === null) {
+                return Result::fail('请先完成身份认证并开通汇款', 409);
+            }
+            // 新支付及结果未知的重试须查询当前资格；已有交易的幂等读取不重新创建支付。
+            if ($order?->provider_trade_id === null) {
+                $status = $this->kyc->status($member);
+                if ($status->isFail()) {
+                    return $status;
+                }
+                $link = $this->members->findFor((int) $member->id);
+            }
             if ($link?->uid === null || ! ($link->statuses['kyc_passed'] ?? false) || ! ($link->statuses['remittance_enabled'] ?? false)) {
                 return Result::fail('请先完成身份认证并开通汇款', 409);
             }
+            if ($this->quoteExpired($snapshot)) {
+                return Result::fail('锁汇已过期，请重新报价', 409);
+            }
             $prepared = app(YabandCheckoutTerms::class)->prepare($member, $snapshot, $account, $ip);
+            if ($this->quoteExpired($snapshot)) {
+                return Result::fail('锁汇已过期，请重新报价', 409);
+            }
             $fields = [...$prepared['fields'], 'uid' => $link->uid, 'currency' => 'EUR'];
             unset($fields['order_id'], $fields['request_id'], $fields['type'], $fields['pay_method']);
             $fields['amount'] = $this->decimal($snapshot['principal_minor']);
@@ -99,13 +118,17 @@ final class MemberCheckoutService
             if (! $order->wasRecentlyCreated && ($prepared['replay_safe'] ?? false) !== true) {
                 return Result::fail('原支付请求尚未确认，请联系客户服务查询该笔订单', 409);
             }
+            // 等待数据库锁也可能跨越报价有效期，最后一道检查在实际出网前执行。
+            if ($this->quoteExpired($snapshot)) {
+                return Result::fail('锁汇已过期，请重新报价', 409);
+            }
 
             $result = $this->yaband->submitPayment([
                 ...$fields, 'order_id' => $order->reference, 'request_id' => $order->payment_request_id,
             ], $order->white_label);
             $trade = $result['trade_id'] ?? null;
             $url = $result['url'] ?? null;
-            if (($result['order_id'] ?? null) !== $order->reference || ! is_string($trade) || trim($trade) === '' || strlen($trade) > 64) {
+            if (! $this->paymentMatches($result, $order, $link->uid)) {
                 return Result::fail('雅本支付响应与本地订单不匹配，请查询处理结果', 502);
             }
             if (! is_string($url) || strlen($url) > 2048 || ! filter_var($url, FILTER_VALIDATE_URL)
@@ -122,6 +145,34 @@ final class MemberCheckoutService
         }
     }
 
+    /** 同一报价的有效期在外部查询、账户准备及出网前均需重新检查。 */
+    private function quoteExpired(array $snapshot): bool
+    {
+        return ! is_int($snapshot['expires_at'] ?? null) || $snapshot['expires_at'] <= now()->timestamp;
+    }
+
+    /** 先核对订单与交易，返回付款会员、金额或币种时继续核对，金额不经浮点转换。 */
+    private function paymentMatches(array $result, RemittanceOrder $order, string $uid): bool
+    {
+        $trade = $result['trade_id'] ?? null;
+        if (($result['order_id'] ?? null) !== $order->reference || ! is_string($trade) || trim($trade) === '' || strlen($trade) > 64) {
+            return false;
+        }
+        if (array_key_exists('uid', $result)) {
+            $responseUid = $result['uid'];
+            if ((! is_string($responseUid) && ! is_int($responseUid)) || (string) $responseUid !== $uid) {
+                return false;
+            }
+        }
+        if (array_key_exists('amount', $result)
+            && (! is_string($result['amount']) || $result['amount'] !== $this->decimal($order->principal_minor))) {
+            return false;
+        }
+
+        return ! array_key_exists('currency', $result) || $result['currency'] === 'EUR';
+    }
+
+    /** 在会员事务锁内保留订单和优惠券，禁止注销通过后新建汇款。 */
     private function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash): RemittanceOrder|Result
     {
         return $this->database->transaction(function () use ($member, $quote, $snapshot, $whiteLabel, $hash): RemittanceOrder|Result {
@@ -159,11 +210,13 @@ final class MemberCheckoutService
         }, attempts: 3);
     }
 
+    /** 从最小货币单位生成两位小数字符串，避免浮点误差。 */
     private function decimal(int $minor): string
     {
         return sprintf('%d.%02d', intdiv($minor, 100), $minor % 100);
     }
 
+    /** 只有当前可付款状态才返回已保存的付款链接。 */
     private function success(RemittanceOrder $order): Result
     {
         $payable = in_array($order->income_code, ['02', '03'], true) && $order->refund_code === '00';

@@ -213,7 +213,10 @@ final class YabandRemitWorkflowTest extends TestCase
             ->assertJsonPath('data.0.label', '银行卡 · 8888')->assertJsonMissingPath('data.0.secret');
         $this->bindSigner();
         $attempts = 0;
-        Http::fake(['*/api/whitelable/transaction/payment' => function (Request $request) use (&$attempts) {
+        Http::fake(['*/api/kyc/query' => Http::response($this->reply([
+            'uid' => '101', 'user_status_code' => '1001', 'remit_status_code' => '4001',
+            'kyc_status_code' => '5004', 'idv_status_code' => '2006', 'profile_status_code' => '3003',
+        ])), '*/api/whitelable/transaction/payment' => function (Request $request) use (&$attempts) {
             if (++$attempts === 1) {
                 return Http::response([], 504);
             }
