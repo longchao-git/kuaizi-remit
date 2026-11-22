@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Model\System\User;
 use App\Permission\RemittancePermission;
 use App\Repository\Remittance\RemittanceCouponRepository;
+use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\Contract\YabandRemitCallbackVerifier;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
@@ -165,6 +166,71 @@ final class RemittanceOrderTest extends TestCase
             $this->assertDatabaseCount('member_notifications', $notices + 1);
             $this->postJson($path)->assertOk();
             $this->assertDatabaseCount('member_notifications', $notices + 1);
+        }
+    }
+
+    public function test_query_uid_must_match_the_bound_member_before_updating_orders_coupons_or_notices(): void
+    {
+        config(['broadcasting.default' => 'log']);
+        config(['yaband_remit.base_url' => 'https://sandbox.example.test', 'yaband_remit.mid' => '900001', 'yaband_remit.password' => 'test-password']);
+        $this->app->instance(YabandRemitSigner::class, new class implements YabandRemitSigner
+        {
+            public function sign(string $path, array $payload): string
+            {
+                return 'test-signature';
+            }
+        });
+        Http::preventStrayRequests();
+        $member = User::factory()->create();
+        $operator = User::factory()->create(['is_platform_staff' => true, 'platform_role' => 'operations']);
+        $links = app(YabandRemitMemberRepository::class);
+        $link = $links->getOrCreate($member->id);
+        $this->withToken($operator->createToken('platform', [RemittancePermission::SYNC_ORDERS])->plainTextToken);
+
+        foreach ([false, true] as $whiteLabel) {
+            $links->saveState($link, null, null);
+            // 两个模式使用独立时间窗口，保留真实接口限流中间件。
+            $this->travel(1)->minutes();
+            $reference = $this->seedOrder($member);
+            DB::table('remittance_orders')->where('reference', $reference)->update(['white_label' => $whiteLabel]);
+            $coupon = app(RemittanceCouponRepository::class)->issue((string) Str::uuid(), [
+                'member_id' => $member->id, 'issue_fingerprint' => 'member-check-'.$reference, 'title' => '折扣券',
+                'discount_bps' => 3000, 'expires_at' => now()->addDay(),
+            ]);
+            $coupon->forceFill(['order_reference' => $reference])->saveOrFail();
+            $state = [
+                'mid' => '900001', 'order_id' => $reference, 'trade_id' => 'trade-'.$reference,
+                'income_status_code' => '00', 'outgoing_status_code' => '05', 'refund_status_code' => '00',
+            ];
+            $replies = Http::sequence();
+            foreach (['101', '102', 102, null, '', ['101'], true, '101', 101] as $uid) {
+                $replies->push($this->providerReply(['transaction_info' => [...$state, 'uid' => $uid]]));
+            }
+            $queryPath = $whiteLabel ? '/api/whitelable/transaction/query' : '/api/transaction/query';
+            Http::fake([
+                'https://sandbox.example.test/api/auth/login' => Http::response($this->providerReply([
+                    'token' => 'test-token', 'expires_in' => 3600, 'expires_at' => now()->addHour()->timestamp, 'token_type' => 'Bearer',
+                ])),
+                'https://sandbox.example.test'.$queryPath => $replies,
+            ]);
+            $path = '/api/admin/remittance/orders/'.$reference.'/refresh';
+            $this->postJson($path)->assertStatus(502);
+            $this->assertDatabaseHas('remittance_orders', ['reference' => $reference, 'income_code' => '03', 'provider_checked_at' => null]);
+            $this->assertDatabaseCount('member_notifications', $whiteLabel ? 1 : 0);
+            $links->saveState($link, '101', null);
+
+            for ($attempt = 0; $attempt < 6; $attempt++) {
+                $this->postJson($path)->assertStatus(502);
+                $this->assertDatabaseHas('remittance_orders', [
+                    'reference' => $reference, 'income_code' => '03', 'outgoing_code' => '01', 'provider_checked_at' => null,
+                ]);
+                $this->assertDatabaseHas('remittance_coupons', ['id' => $coupon->id, 'order_reference' => $reference, 'redeemed_at' => null]);
+                $this->assertDatabaseCount('member_notifications', $whiteLabel ? 1 : 0);
+            }
+            $this->postJson($path)->assertOk()->assertJsonPath('data.status_label', '已下发');
+            $this->assertDatabaseMissing('remittance_coupons', ['id' => $coupon->id, 'redeemed_at' => null]);
+            $this->postJson($path)->assertOk();
+            $this->assertDatabaseCount('member_notifications', $whiteLabel ? 2 : 1);
         }
     }
 

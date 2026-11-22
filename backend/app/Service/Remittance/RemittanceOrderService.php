@@ -7,6 +7,7 @@ use App\Common\Result;
 use App\Model\Remittance\RemittanceOrder;
 use App\Repository\Remittance\RemittanceCouponRepository;
 use App\Repository\Remittance\RemittanceOrderRepository;
+use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\YabandException;
 use App\Service\Remittance\Yaband\YabandRemitClient;
@@ -25,6 +26,7 @@ final class RemittanceOrderService
         private MemberNotificationService $notices,
         private DatabaseManager $database,
         private RemittanceCouponRepository $coupons,
+        private YabandRemitMemberRepository $members,
     ) {}
 
     /** 返回保存的订单。App 始终带当前会员编号作为归属条件。 */
@@ -69,7 +71,7 @@ final class RemittanceOrderService
         return $this->refresh($order->reference);
     }
 
-    /** 只查询已有雅本交易，校验订单号和交易号后保存三条独立状态。 */
+    /** 查询已有雅本交易，核对订单、交易及返回的会员归属后保存三条独立状态。 */
     public function refresh(string $reference): Result
     {
         $reference = strtolower($reference);
@@ -92,6 +94,15 @@ final class RemittanceOrderService
             if (! is_array($transaction) || ($transaction['order_id'] ?? null) !== $order->reference
                 || ($transaction['trade_id'] ?? null) !== $order->provider_trade_id) {
                 return Result::fail('雅本返回的交易与订单不匹配', 502);
+            }
+
+            if (array_key_exists('uid', $transaction)) {
+                $providerUid = $transaction['uid'];
+                $memberUid = $this->members->findFor((int) $order->member_id)?->uid;
+                if ((! is_string($providerUid) && ! is_int($providerUid)) || $memberUid === null
+                    || (string) $providerUid !== $memberUid) {
+                    return Result::fail('雅本返回的用户与订单不匹配', 502);
+                }
             }
 
             $income = $transaction['income_status_code'] ?? null;
