@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Http;
 #[Singleton]
 final class YabandTransport
 {
+    /** 只接受明确配置的商户编号，用于请求及缓存隔离。 */
     public function merchantId(): string
     {
         $mid = config('yaband_remit.mid');
@@ -22,10 +23,11 @@ final class YabandTransport
         return $mid;
     }
 
+    /** 在商户级锁内读取加密缓存，接近过期或缓存损坏时重新鉴权。 */
     public function token(): string
     {
         $mid = $this->merchantId();
-        $key = 'yaband-remit:bearer:'.hash('sha256', $this->baseUrl().'|'.$mid);
+        $key = $this->tokenCacheKey();
 
         return Cache::lock($key.':lock', 20)->block(12, function () use ($key, $mid): string {
             $cached = Cache::get($key);
@@ -85,8 +87,19 @@ final class YabandTransport
         } catch (ConnectionException) {
             throw new YabandException('无法连接雅本汇款 API。');
         }
-        $json = $preserveDecimals ? $this->preserveDecimals($response->body()) : $response->body();
-        $body = json_decode($json, true, flags: JSON_BIGINT_AS_STRING);
+        $raw = $response->body();
+        $body = json_decode($raw, true, flags: JSON_BIGINT_AS_STRING);
+        $rejected = $response->status() === 401 || ($response->status() === 200 && is_array($body)
+            && ($body['status'] ?? null) !== true && in_array($body['code'] ?? null, [401, '401'], true)
+            && ($body['message'] ?? null) === 'Invalid Token');
+        if ($token !== null && $rejected) {
+            // 只清理明确被拒绝的缓存；本次请求原样失败，支付等操作不自动重放。
+            // 雅本也用HTTP200/code401返回签名错误，不能仅按业务码判断令牌过期。
+            $this->forgetRejectedToken($token);
+        }
+        if ($preserveDecimals) {
+            $body = json_decode($this->preserveDecimals($raw), true, flags: JSON_BIGINT_AS_STRING);
+        }
         if (! $response->successful() || ! is_array($body) || ($body['status'] ?? null) !== true
             || ! in_array($body['code'] ?? null, [200, '200'], true) || ! is_array($body['data'] ?? null)) {
             $rawCode = is_array($body) ? ($body['code'] ?? null) : null;
@@ -95,6 +108,35 @@ final class YabandTransport
         }
 
         return $body['data'];
+    }
+
+    /** 用地址和商户共同隔离Bearer缓存，供获取及拒绝后的清理复用。 */
+    private function tokenCacheKey(): string
+    {
+        return 'yaband-remit:bearer:'.hash('sha256', $this->baseUrl().'|'.$this->merchantId());
+    }
+
+    /** 锁内核对被拒令牌，迟到的401不能删除其他进程已经更新的会话。 */
+    private function forgetRejectedToken(string $rejected): void
+    {
+        $key = $this->tokenCacheKey();
+        Cache::lock($key.':lock', 20)->block(12, function () use ($key, $rejected): void {
+            $cached = Cache::get($key);
+            if (! is_string($cached)) {
+                return;
+            }
+            try {
+                $matches = hash_equals(Crypt::decryptString($cached), $rejected);
+            } catch (DecryptException) {
+                // 无法读取的缓存也没有继续使用的价值，下一次请求再鉴权。
+                Cache::forget($key);
+
+                return;
+            }
+            if ($matches) {
+                Cache::forget($key);
+            }
+        });
     }
 
     /** 只给 JSON 字符串之外的小数数值加引号，保留整数元数据及字符串内的原始内容。 */
@@ -115,6 +157,7 @@ final class YabandTransport
         return $result;
     }
 
+    /** 所有请求只发往已配置的HTTPS源站，不携带URL凭据或跟随重定向。 */
     private function baseUrl(): string
     {
         $value = config('yaband_remit.base_url');
