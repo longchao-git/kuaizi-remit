@@ -35,6 +35,7 @@ use App\Permission\PlatformRoles;
 use App\Permission\RemittancePermission;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/', HealthController::class)->name('api.root');
 Route::get('/health', HealthController::class)->name('api.health');
 Route::get('/app/agreements/{kind}', [AgreementController::class, 'show'])
     ->whereIn('kind', ['terms', 'privacy']);

@@ -84,7 +84,7 @@ npm run build:h5  # 产物在 unpackage/dist/build/h5
 
 项目沿用 HBuilderX 目录结构（`manifest.json`、`pages.json` 在根目录），`scripts/h5.mjs` 会在 CLI 启动前把 `UNI_INPUT_DIR` 指向根目录。
 
-App 默认接口根地址为 `https://api.kzremit.com/api/`。需要覆盖时，复制 `.env.example` 为 `.env.local` 并设置 `VITE_APP_BASE_URL`；本地后端调试可显式填 `http://127.0.0.1:8688/api/`，真机运行应使用可访问的 HTTPS 地址。重建或重新打包后配置才进入安装包，已安装的旧包不会自动切换地址。后台管理员仅用于管理端，不能作为 App 会员登录，当前测试服务器正式短信未接入。
+App 默认接口根地址为 `https://api.kzremit.com/`，例如协议读取为 `https://api.kzremit.com/app/agreements/terms`。需要覆盖时，复制 `.env.example` 为 `.env.local` 并设置 `VITE_APP_BASE_URL`；本地后端调试可显式填 `http://127.0.0.1:8688/`，真机运行应使用可访问的 HTTPS 地址。旧 `/api/` 地址由服务端保留兼容。重建或重新打包后配置才进入安装包，已安装的旧包不会自动切换地址。后台管理员仅用于管理端，不能作为 App 会员登录，当前测试服务器正式短信未接入。
 
 模板没有 mock。默认接口与 `api/spring-boot` 的 App 端点配套：短信/微信登录、微信手机关联、退出、当前会员、资料修改和文件上传，成功业务码为 `0`。需配置实际短信与微信服务，不能使用固定验证码；身份冲突不自动合并。更换后端时需同步调整 Repository 与 `request/http.ts` 的响应解包。
 

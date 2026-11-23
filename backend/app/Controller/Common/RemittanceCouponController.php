@@ -17,7 +17,7 @@ final class RemittanceCouponController extends AbstractController
     public function index(Request $request): JsonResponse
     {
         $input = $request->validate(['page' => ['sometimes', 'integer', 'between:1,1000000']]);
-        $member = $request->routeIs('coupon.member.*') ? (int) $request->user()->getKey() : null;
+        $member = $request->routeIs('coupon.member.*', 'legacy.coupon.member.*') ? (int) $request->user()->getKey() : null;
 
         return $this->respond($this->coupons->page((int) ($input['page'] ?? 1), $member));
     }

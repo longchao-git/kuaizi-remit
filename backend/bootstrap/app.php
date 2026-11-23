@@ -7,30 +7,36 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        apiPrefix: '',
+        then: function (): void {
+            // 旧包和已登记通知地址继续使用同一套业务与权限，名称与规范路由分开。
+            Route::middleware('api')->prefix('api')->name('legacy.')->group(__DIR__.'/../routes/api.php');
+            Broadcast::routes(['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum']]);
+        },
     )
     ->withBroadcasting(__DIR__.'/../routes/channels.php', [
-        'prefix' => 'api',
         'middleware' => ['api', 'auth:sanctum'],
     ])
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->redirectGuestsTo(static fn (Request $request) => $request->is('api', 'api/*') ? null : '/');
+        $middleware->redirectGuestsTo(static fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api', 'api/*') || $request->expectsJson(),
+            static fn () => true,
         );
 
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request): Response {
-            if (! $request->is('api', 'api/*') || $response->getStatusCode() < 400) {
+            if ($response->getStatusCode() < 400) {
                 return $response;
             }
 

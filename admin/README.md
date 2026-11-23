@@ -16,7 +16,7 @@ npm run check
 npm run dev
 ```
 
-`VITE_API_BASE` 是浏览器请求前缀，开发代理会使用同一前缀；`VITE_PROXY_TARGET` 只配置本地后端地址。
+后台默认直接请求 `https://api.kzremit.com/`，例如登录为 `https://api.kzremit.com/user/login`，不再经过后台域名下的 `/api`。`VITE_API_BASE` 可覆盖该根地址；本地调试如需旧同域代理，可显式使用 `/api` 及 `VITE_PROXY_TARGET`。服务端允许管理端来源的跨域预检与 Bearer 请求，旧 `/api` 路径继续兼容。
 
 ## 已内置的能力
 

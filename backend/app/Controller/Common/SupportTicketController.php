@@ -53,7 +53,7 @@ final class SupportTicketController extends AbstractController
 
     private function member(Request $request): ?int
     {
-        return $request->routeIs('support.tickets.member.*') ? (int) $request->user()->getKey() : null;
+        return $request->routeIs('support.tickets.member.*', 'legacy.support.tickets.member.*') ? (int) $request->user()->getKey() : null;
     }
 
     private function respond(Result $result): JsonResponse

@@ -51,7 +51,7 @@ final class SupportMessageController extends AbstractController
     {
         $memberId = $this->resolveMember($request, $member);
         $input = $request->validate(['message_id' => ['required', 'integer:strict', 'min:1']]);
-        $side = $request->routeIs('support.member.*') ? 'member' : 'staff';
+        $side = $request->routeIs('support.member.*', 'legacy.support.member.*') ? 'member' : 'staff';
         $result = $this->messages->read($memberId, $side, $input['message_id']);
 
         return $result->isSuccess()
@@ -76,7 +76,7 @@ final class SupportMessageController extends AbstractController
         $user = $request->user();
         $token = $user->currentAccessToken();
         abort_unless($token instanceof PersonalAccessToken, 403);
-        if ($request->routeIs('support.member.*')) {
+        if ($request->routeIs('support.member.*', 'legacy.support.member.*')) {
             abort_if($user->is_platform_staff || $token->name === 'platform', 403);
 
             return (int) $user->getKey();
