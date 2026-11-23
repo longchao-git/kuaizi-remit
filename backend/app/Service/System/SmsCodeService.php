@@ -15,10 +15,12 @@ final class SmsCodeService
 {
     public const SCENE_LOGIN = 'login';
 
+    /** 测试码和普通短信共用哈希存储及单次消费规则。 */
     public function __construct(
         private SmsCodeRepository $codes,
         private SmsChannel $channel,
         private DatabaseManager $database,
+        private TestSmsLogin $testLogin,
     ) {}
 
     /**
@@ -28,14 +30,17 @@ final class SmsCodeService
      */
     public function send(string $mobile, ?string $ip = null): array
     {
-        $code = (string) random_int(100000, 999999);
+        $test = $this->testLogin->allows($mobile);
+        $code = $test ? $this->testLogin->code() : (string) random_int(100000, 999999);
         $ttl = (int) config('remit.sms.code_ttl', 300);
 
         $this->codes->purgeExpired();
         $this->codes->replace($mobile, self::SCENE_LOGIN, $this->hash($code), now()->addSeconds($ttl), $ip);
 
         try {
-            $this->channel->send($mobile, $code, self::SCENE_LOGIN);
+            if (! $test) {
+                $this->channel->send($mobile, $code, self::SCENE_LOGIN);
+            }
         } catch (Throwable $error) {
             $this->codes->forget($mobile, self::SCENE_LOGIN);
             report($error);
@@ -43,7 +48,7 @@ final class SmsCodeService
             throw new RuntimeException('短信发送失败，请稍后重试', 0, $error);
         }
 
-        return $this->testCodeEnabled()
+        return ! $test && $this->testCodeEnabled()
             ? ['sent' => true, 'test_code' => $code]
             : ['sent' => true];
     }

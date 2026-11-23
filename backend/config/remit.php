@@ -8,6 +8,11 @@ return [
     'local_login_email' => env('REMIT_LOCAL_LOGIN_EMAIL'),
     'local_rate_ten_thousandths' => env('REMIT_LOCAL_RATE_TEN_THOUSANDTHS'),
     'local_sms_login' => env('REMIT_LOCAL_SMS_LOGIN', false),
+    'test_sms_login' => [
+        'enabled' => env('REMIT_TEST_SMS_LOGIN_ENABLED', false),
+        'mobile' => env('REMIT_TEST_SMS_LOGIN_MOBILE'),
+        'code' => env('REMIT_TEST_SMS_LOGIN_CODE'),
+    ],
     'sms' => [
         'channel' => env('REMIT_SMS_CHANNEL', 'log'),
         'code_ttl' => (int) env('REMIT_SMS_CODE_TTL', 300),

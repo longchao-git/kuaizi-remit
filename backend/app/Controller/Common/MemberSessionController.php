@@ -18,10 +18,13 @@ final class MemberSessionController extends AbstractController
 
     public function sendSms(Request $request, MemberSessionService $sessions, SmsCodeService $codes): JsonResponse
     {
-        if (! $sessions->localSmsEnabled()) {
+        if (! $sessions->smsEnabled()) {
             return $this->smsUnavailable();
         }
         $input = $request->validate(['mobile' => ['required', 'string', self::SPANISH_MOBILE]]);
+        if (! $sessions->allowsSmsMobile($input['mobile'])) {
+            return $this->fail(403, '当前仅开放专用测试手机号');
+        }
 
         try {
             $result = $codes->send($input['mobile'], $request->ip());
@@ -29,12 +32,13 @@ final class MemberSessionController extends AbstractController
             return $this->fail(503, '短信发送失败，请稍后重试');
         }
 
-        return $this->success($result, '验证码已发送');
+        return $this->success($result, $sessions->isTestSmsMobile($input['mobile'])
+            ? '测试验证码已准备，请输入约定测试码' : '验证码已发送');
     }
 
     public function loginSms(Request $request, MemberSessionService $sessions): JsonResponse
     {
-        if (! $sessions->localSmsEnabled()) {
+        if (! $sessions->smsEnabled()) {
             return $this->smsUnavailable();
         }
         $input = $request->validate([

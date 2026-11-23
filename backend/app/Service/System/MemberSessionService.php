@@ -18,7 +18,15 @@ final class MemberSessionService
 
     public const LOCAL_SMS_TOKEN_NAME = 'remit-local-sms';
 
-    public function __construct(private UserRepository $users, private DatabaseManager $database, private SmsCodeService $codes) {}
+    public const TEST_SMS_TOKEN_NAME = 'remit-test-sms';
+
+    /** 复用会员仓储、验证码与事务，并单独注入沙箱测试登录策略。 */
+    public function __construct(
+        private UserRepository $users,
+        private DatabaseManager $database,
+        private SmsCodeService $codes,
+        private TestSmsLogin $testLogin,
+    ) {}
 
     /** 只有本地环境且明确设置账号邮箱，才允许使用联调登录。 */
     public function localLoginEmail(): ?string
@@ -52,20 +60,41 @@ final class MemberSessionService
         return app()->isLocal() && config('remit.local_sms_login') === true;
     }
 
+    /** 本地短信与显式开启的专用沙箱测试登录分别判定。 */
+    public function smsEnabled(): bool
+    {
+        return $this->localSmsEnabled() || $this->testLogin->enabled();
+    }
+
+    /** 非本地环境只接受获准的唯一测试号码。 */
+    public function allowsSmsMobile(string $mobile): bool
+    {
+        return $this->localSmsEnabled() || $this->testLogin->allows($mobile);
+    }
+
+    /** 让发送响应明确区分测试码与真实短信。 */
+    public function isTestSmsMobile(string $mobile): bool
+    {
+        return $this->testLogin->allows($mobile);
+    }
+
     /** 校验短信验证码后登录，首次登录自动创建会员。 */
     public function loginSms(string $mobile, string $code): Result
     {
-        if (! $this->localSmsEnabled() || ! $this->codes->verify($mobile, $code)) {
+        if (! $this->allowsSmsMobile($mobile) || ! $this->codes->verify($mobile, $code)) {
             return Result::fail('验证码错误', ErrorCode::INVALID_CREDENTIALS);
         }
 
         return $this->database->transaction(function () use ($mobile): Result {
-            $member = $this->users->findOrRegisterMobile($mobile);
-            if ($member->is_platform_staff) {
+            $test = $this->testLogin->allows($mobile);
+            $member = $test
+                ? $this->users->findOrRegisterTestMobile($mobile, $this->testLogin->memberEmail($mobile))
+                : $this->users->findOrRegisterMobile($mobile);
+            if ($member->is_platform_staff || ($test && ! $this->testLogin->allowsMember($member))) {
                 return Result::fail('无法登录此账号', ErrorCode::INVALID_CREDENTIALS);
             }
 
-            return $this->start($member, self::LOCAL_SMS_TOKEN_NAME);
+            return $this->start($member, $test ? self::TEST_SMS_TOKEN_NAME : self::LOCAL_SMS_TOKEN_NAME);
         }, attempts: 3);
     }
 

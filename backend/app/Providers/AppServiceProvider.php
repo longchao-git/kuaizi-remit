@@ -10,6 +10,7 @@ use App\Service\Sms\LogSmsChannel;
 use App\Service\Sms\NullSmsChannel;
 use App\Service\Sms\SmsChannel;
 use App\Service\System\MemberSessionService;
+use App\Service\System\TestSmsLogin;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -63,6 +64,11 @@ class AppServiceProvider extends ServiceProvider
 
                 return app(MemberSessionService::class)->localSmsEnabled()
                     && $member instanceof User && ! $member->is_platform_staff && $member->phone_e164 !== null;
+            }
+            if ($token->name === MemberSessionService::TEST_SMS_TOKEN_NAME) {
+                $member = $token->tokenable;
+
+                return $member instanceof User && app(TestSmsLogin::class)->allowsMember($member);
             }
             if ($token->name !== MemberSessionService::LOCAL_TOKEN_NAME) {
                 return $valid;

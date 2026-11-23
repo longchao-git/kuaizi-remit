@@ -134,6 +134,16 @@ final class UserRepository extends AbstractRepository
         ]);
     }
 
+    /** 仅创建专用测试会员，已有号码不修改身份，由调用方核对测试邮箱。 */
+    public function findOrRegisterTestMobile(string $mobile, string $email): User
+    {
+        return $this->query()->firstOrCreate(['phone_e164' => $mobile], [
+            'name' => 'App 测试会员',
+            'email' => $email,
+            'password' => Str::random(64),
+        ]);
+    }
+
     public function startMemberSession(User $user, string $name): NewAccessToken
     {
         return $user->createToken($name, [], now()->addHours(2));

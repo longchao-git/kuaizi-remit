@@ -48,6 +48,7 @@ final class MemberPushDeviceRepository extends AbstractRepository
     {
         $sessions = app(MemberSessionService::class);
         $tokens = PersonalAccessToken::query()->select('id')->where('tokenable_id', $member)
+            ->where('name', '!=', MemberSessionService::TEST_SMS_TOKEN_NAME)
             ->where(fn (Builder $query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()));
         if (! $sessions->localSmsEnabled()) {
             $tokens->where('name', '!=', MemberSessionService::LOCAL_SMS_TOKEN_NAME);
