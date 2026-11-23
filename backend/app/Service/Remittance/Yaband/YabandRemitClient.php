@@ -85,6 +85,21 @@ final class YabandRemitClient
         return $this->send($this->transactionPath('payment', $whiteLabel), [...$data, 'type' => 'transaction', 'pay_method' => 'online']);
     }
 
+    /** 查询 EUR→CNY 的参考汇率，不创建报价锁定或支付订单。 */
+    public function queryReferenceRate(string $requestId): string
+    {
+        $data = $this->send('/api/whitelable/transaction/queryExchangeRate', [
+            'request_id' => $requestId, 'source_currency' => 'EUR', 'target_currency' => 'CNY',
+        ], preserveDecimals: true);
+        $rate = $data['exchange_rate'] ?? null;
+        if (($data['source_currency'] ?? null) !== 'EUR' || ($data['target_currency'] ?? null) !== 'CNY'
+            || (! is_string($rate) && ! is_int($rate))) {
+            throw new YabandException('雅本返回的参考汇率格式或币种不匹配。');
+        }
+
+        return (string) $rate;
+    }
+
     /** 查询机构或白标交易，并核对交易内的商户归属后交给订单服务同步。 */
     public function queryTransaction(string $requestId, string $tradeId, bool $whiteLabel): array
     {
@@ -113,7 +128,8 @@ final class YabandRemitClient
         return ($whiteLabel ? '/api/whitelable/transaction/' : '/api/transaction/').$action;
     }
 
-    private function send(string $path, array $data): array
+    /** 对业务请求签名并核对响应归属，参考汇率可要求保留小数文本。 */
+    private function send(string $path, array $data, bool $preserveDecimals = false): array
     {
         if (! app()->bound(YabandRemitSigner::class)) {
             throw new YabandException('雅本汇款项目签名尚未配置。');
@@ -124,7 +140,7 @@ final class YabandRemitClient
             throw new YabandException('雅本汇款请求签名为空。');
         }
 
-        $response = $this->transport->post($path, [...$body, 'sign' => $sign], $this->transport->token());
+        $response = $this->transport->post($path, [...$body, 'sign' => $sign], $this->transport->token(), $preserveDecimals);
         $this->assertMerchant($response);
         if (isset($data['type']) && array_key_exists('type', $response) && $response['type'] !== $data['type']) {
             throw new YabandException('雅本响应的业务类型不匹配。');

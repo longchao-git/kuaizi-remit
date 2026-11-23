@@ -81,6 +81,14 @@ docker exec -it kuaizi-remit-api php artisan remit:create-admin admin@kuaizi.loc
 
 本机沙箱可使用被 Git 忽略的 `.env.yaband-sandbox` 保存接入地址、MID、密码和 `YABAND_REMIT_SECRET_KEY`。在本地沙箱环境设置 `APP_KEY` 和 `CACHE_STORE=array`，从本目录运行 `php artisan remit:check-yaband --env=yaband-sandbox`，可验证 Token 并查看请求签名和回调验签组件的配置状态。若 Windows 便携 PHP 缺少 CA 文件，可用 `php -d curl.cainfo=<受信任的 CA 文件>` 执行同一命令。
 
+### 雅本真实参考汇率
+
+配置雅本地址、MID、密码和签名密钥后，设置 `YABAND_REMIT_REFERENCE_RATE_ENABLED=true`，App 现有报价接口即可使用 `/api/whitelable/transaction/queryExchangeRate` 返回的 EUR→CNY 参考汇率，再按后台费用与点差规则试算。该路径来自 MID700001 Postman 集合，不据其 `whitelable` 路径推定本商户支付模式。
+
+响应小数先保留为十进制文本，再按现有四位汇率精度四舍五入为整数万分位；不使用浮点金额计算。币种、十进制格式或范围错误会拒绝报价。合法参考值按商户与上游地址隔离，缓存 60 秒，缓存命中保留原观察时间；过期查询失败不返回旧值，也不回退到本地配置汇率。
+
+此类报价仍为 `mode=local_estimate`、`can_submit=false`，表示本地规则试算；新增 `rate_source=yaband_reference` 和 `reference_rate_observed_at` 标明真实来源及观察时间。可保存草稿，不生成汇款订单；源汇率和点差不直接返回会员。若已配置正式锁定报价适配器，保留其原有优先级。默认开关为 false，未启用时继续沿用现有本地联调逻辑。参考汇率查询通过不代表正式报价、本人收款或通知验签已经接通。
+
 ### 正式下单的查询与响应核对
 
 正式报价及本人收款适配配置后，每次新支付或未确认支付的重试会先向雅本查询当前 KYC 和汇款资格，并复用原状态同步；旧的认证通过快照不能放行已过期、停用或查询失败的用户。已有交易编号的相同订单重试不重复创建支付，也不额外查询 KYC。报价有效期会在 KYC 查询后、收款信息准备后及实际请求支付前复查，到期返回 409，不请求付款。若订单已预留，保留原订单编号及未核销的券，不把本地拒绝伪装成上游取消或付款成功。

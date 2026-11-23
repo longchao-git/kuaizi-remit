@@ -12,7 +12,9 @@ use App\Repository\Remittance\RemittanceOrderRepository;
 use App\Repository\Remittance\RemittanceQuoteRecordRepository;
 use App\Service\Remittance\Yaband\Contract\YabandRateLock;
 use App\Service\Remittance\Yaband\YabandException;
+use App\Service\Remittance\Yaband\YabandReferenceRateService;
 use Illuminate\Container\Attributes\Singleton;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 
 /** App 正式与联调报价。本地试算只用于展示。 */
 #[Singleton]
@@ -24,6 +26,7 @@ final class MemberQuoteService
         private RemittanceCouponRepository $coupons,
         private RemittanceOrderRepository $orders,
         private RemittanceQuoteRecordRepository $records,
+        private YabandReferenceRateService $referenceRates,
     ) {}
 
     /** 按所选渠道报价，并保存费用和实际锁汇状态。 */
@@ -56,10 +59,18 @@ final class MemberQuoteService
                 return Result::fail('锁汇结果无效，请重新报价。', ErrorCode::QUOTE_UNAVAILABLE);
             }
         }
-        $rate = filter_var($locked['rate_ten_thousandths'] ?? config('remit.local_rate_ten_thousandths'), FILTER_VALIDATE_INT, [
+        $referenceRate = null;
+        if ($locked === null && config('yaband_remit.reference_rate_enabled') === true) {
+            try {
+                $referenceRate = $this->referenceRates->current();
+            } catch (YabandException|LockTimeoutException) {
+                return Result::fail('当前无法获取汇率，请稍后再试。', ErrorCode::QUOTE_UNAVAILABLE);
+            }
+        }
+        $rate = filter_var($locked['rate_ten_thousandths'] ?? $referenceRate['rate_ten_thousandths'] ?? config('remit.local_rate_ten_thousandths'), FILTER_VALIDATE_INT, [
             'options' => ['min_range' => 1, 'max_range' => 1_000_000],
         ]);
-        if (($locked === null && ! app()->isLocal()) || $rate === false) {
+        if (($locked === null && $referenceRate === null && ! app()->isLocal()) || $rate === false) {
             return Result::fail('当前无法获取汇率，请稍后再试。', ErrorCode::QUOTE_UNAVAILABLE);
         }
 
@@ -77,6 +88,7 @@ final class MemberQuoteService
             'mode' => $locked === null ? 'local_estimate' : 'locked',
             'can_submit' => $locked !== null,
             'coupon_id' => $coupon?->id,
+            ...($referenceRate === null ? [] : ['rate_source' => 'yaband_reference', 'reference_rate_observed_at' => $referenceRate['observed_at']]),
             ...($locked === null ? [] : ['provider_lock_reference' => $locked['reference'], 'expires_at' => $locked['expires_at']]),
         ]);
         $clientQuote = $record->snapshot;

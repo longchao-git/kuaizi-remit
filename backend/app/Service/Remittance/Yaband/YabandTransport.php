@@ -71,7 +71,8 @@ final class YabandTransport
         });
     }
 
-    public function post(string $path, array $payload, ?string $token = null): array
+    /** 发送已准备好的业务参数；汇率请求可保留响应小数文本供精确换算。 */
+    public function post(string $path, array $payload, ?string $token = null, bool $preserveDecimals = false): array
     {
         $request = Http::asJson()->acceptJson()->connectTimeout(4)->timeout(10)->withoutRedirecting();
         if ($token !== null) {
@@ -84,7 +85,8 @@ final class YabandTransport
         } catch (ConnectionException) {
             throw new YabandException('无法连接雅本汇款 API。');
         }
-        $body = $response->json(flags: JSON_BIGINT_AS_STRING);
+        $json = $preserveDecimals ? $this->preserveDecimals($response->body()) : $response->body();
+        $body = json_decode($json, true, flags: JSON_BIGINT_AS_STRING);
         if (! $response->successful() || ! is_array($body) || ($body['status'] ?? null) !== true
             || ! in_array($body['code'] ?? null, [200, '200'], true) || ! is_array($body['data'] ?? null)) {
             $rawCode = is_array($body) ? ($body['code'] ?? null) : null;
@@ -93,6 +95,24 @@ final class YabandTransport
         }
 
         return $body['data'];
+    }
+
+    /** 只给 JSON 字符串之外的小数数值加引号，保留整数元数据及字符串内的原始内容。 */
+    private function preserveDecimals(string $json): string
+    {
+        if (! json_validate($json)) {
+            throw new YabandException('雅本汇款响应不是有效 JSON。');
+        }
+        $result = preg_replace_callback('/"(?:[^"\\\\]|\\\\.)*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/s', function (array $match): string {
+            $token = $match[0];
+
+            return $token[0] === '"' || strpbrk($token, '.eE') === false ? $token : '"'.$token.'"';
+        }, $json);
+        if ($result === null) {
+            throw new YabandException('雅本汇款响应无法解析。');
+        }
+
+        return $result;
     }
 
     private function baseUrl(): string
