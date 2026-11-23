@@ -64,6 +64,29 @@ final class MemberOperationsTest extends TestCase
             ->assertJsonPath('data.total', 2);
     }
 
+    public function test_member_contacts_hide_generated_emails_and_preserve_real_contacts(): void
+    {
+        $staff = User::factory()->create(['is_platform_staff' => true]);
+        $testEmail = 'test-sms-'.str_repeat('a', 64).'@members.invalid';
+        $contacts = [
+            ['phone-user@mobile.invalid', null],
+            [$testEmail, null],
+            ['contact@example.com', 'contact@example.com'],
+            ['contact@members.invalid', 'contact@members.invalid'],
+        ];
+
+        $this->asToken($staff, 'platform', [RemittancePermission::VIEW_MEMBERS]);
+        foreach ($contacts as $index => [$email, $visibleEmail]) {
+            $member = User::factory()->create(['email' => $email, 'phone_e164' => '+3460000000'.$index]);
+            $this->getJson('/api/admin/remittance/members?keyword='.$member->id)
+                ->assertOk()
+                ->assertJsonPath('data.list.0.id', (string) $member->id)
+                ->assertJsonPath('data.list.0.email', $visibleEmail)
+                ->assertJsonPath('data.list.0.masked_phone', '+34 ••••• 000'.$index);
+            $this->assertSame($email, $member->fresh()->email);
+        }
+    }
+
     private function asToken(User $user, string $type, array $permissions = []): self
     {
         $this->app['auth']->forgetGuards();

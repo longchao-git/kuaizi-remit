@@ -23,11 +23,13 @@ final class PlatformMemberService
         $links = $this->kycMembers->forMembers($rows->getCollection()->modelKeys());
         $items = array_map(static function (User $user) use ($links): array {
             $link = $links->get($user->id);
+            $generatedEmail = str_ends_with($user->email, '@mobile.invalid')
+                || preg_match('/^test-sms-[0-9a-f]{64}@members\.invalid$/D', $user->email) === 1;
 
             return [
                 'id' => (string) $user->getKey(),
                 'name' => $user->name,
-                'email' => str_ends_with($user->email, '@mobile.invalid') ? null : $user->email,
+                'email' => $generatedEmail ? null : $user->email,
                 'masked_phone' => $user->phone_e164 === null ? null : '+34 ••••• '.substr($user->phone_e164, -4),
                 'kyc_registered' => $link?->uid !== null,
                 'kyc_code' => $link?->statuses['kyc_status_code'] ?? null,

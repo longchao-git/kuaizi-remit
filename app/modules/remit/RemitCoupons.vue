@@ -1,7 +1,7 @@
 <template>
   <view class="body">
     <view class="line redemption">
-      <input v-model="code" maxlength="20" placeholder="输入优惠码" aria-label="优惠码" @confirm="claim" />
+      <input v-model="code" maxlength="64" placeholder="输入优惠码" aria-label="优惠码" @confirm="claim" />
       <button class="inline-action accent" :disabled="busy || !code.trim()" @tap="claim">兑换</button>
     </view>
     <text v-if="error" class="description offer" role="alert">{{ error }}</text>
