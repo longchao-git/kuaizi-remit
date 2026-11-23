@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Constants\Common\ErrorCode;
 use App\Model\System\User;
+use App\Permission\PlatformRoles;
 use App\Permission\RemittancePermission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -54,6 +55,36 @@ class PlatformSessionTest extends TestCase
     {
         $member = User::factory()->create();
         $this->postJson('/api/user/login', ['username' => $member->email, 'password' => 'password'])
+            ->assertJsonPath('code', ErrorCode::INVALID_CREDENTIALS);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_staff_can_use_a_username_while_preserving_email_based_admin_permissions(): void
+    {
+        $staff = User::factory()->create(['username' => 'test-operator', 'is_platform_staff' => true]);
+        config(['remit.platform_admin_emails' => [$staff->email]]);
+        $token = $this->postJson('/api/user/login', ['username' => 'test-operator', 'password' => 'password'])
+            ->assertOk()->assertJsonPath('code', 0)->json('data.token');
+        $this->withToken($token)->getJson('/api/user/current')
+            ->assertJsonPath('data.id', (string) $staff->id)
+            ->assertJsonPath('data.username', 'test-operator');
+        $this->getJson('/api/user/permissions')->assertJsonFragment([PlatformRoles::MANAGE_ACCESS]);
+        $this->getJson('/api/admin/remittance/staff')->assertOk();
+        $this->assertDatabaseHas('users', ['id' => $staff->id, 'email' => $staff->email, 'username' => 'test-operator']);
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $this->postJson('/api/user/login', ['username' => $staff->email, 'password' => 'password'])
+            ->assertOk()->assertJsonPath('code', 0);
+    }
+
+    public function test_username_does_not_allow_members_or_an_incorrect_password_into_the_platform(): void
+    {
+        User::factory()->create(['username' => 'member-login', 'is_platform_staff' => false]);
+        User::factory()->create(['username' => 'staff-login', 'is_platform_staff' => true]);
+        $this->postJson('/api/user/login', ['username' => 'member-login', 'password' => 'password'])
+            ->assertJsonPath('code', ErrorCode::INVALID_CREDENTIALS);
+        $this->postJson('/api/user/login', ['username' => 'staff-login', 'password' => 'wrong'])
             ->assertJsonPath('code', ErrorCode::INVALID_CREDENTIALS);
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }

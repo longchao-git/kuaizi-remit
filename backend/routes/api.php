@@ -66,6 +66,12 @@ Route::middleware('auth:sanctum')->prefix('admin/remittance')->group(function ()
     Route::get('/rules', [RemittanceRuleController::class, 'show']);
     Route::put('/rules', [RemittanceRuleController::class, 'update']);
     Route::put('/operations', [RemittanceRuleController::class, 'updateOperations'])->middleware('throttle:30,1,remit-operations-update:');
+    Route::get('/agreements/{kind}', [AgreementController::class, 'editor'])
+        ->whereIn('kind', ['terms', 'privacy'])
+        ->middleware(RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_RULES);
+    Route::put('/agreements/{kind}/draft', [AgreementController::class, 'saveDraft'])
+        ->whereIn('kind', ['terms', 'privacy'])
+        ->middleware([RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_RULES, 'throttle:30,1,remit-agreement-draft:']);
     Route::post('/agreements/{kind}', [AgreementController::class, 'publish'])
         ->whereIn('kind', ['terms', 'privacy'])
         ->middleware([RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_RULES, 'throttle:15,1,remit-agreement-publish:']);

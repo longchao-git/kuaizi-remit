@@ -19,9 +19,12 @@ final class UserRepository extends AbstractRepository
         return new User;
     }
 
-    public function findPlatformStaff(string $email): ?User
+    /** 后台允许专用用户名或原邮箱登录，两个条件均必须属于员工。 */
+    public function findPlatformStaff(string $login): ?User
     {
-        return $this->query()->where('is_platform_staff', true)->where('email', $email)->first();
+        return $this->query()->where('is_platform_staff', true)
+            ->where(fn (Builder $query) => $query->where('username', $login)->orWhere('email', $login))
+            ->first();
     }
 
     public function startStaffSession(User $user, array $abilities): NewAccessToken

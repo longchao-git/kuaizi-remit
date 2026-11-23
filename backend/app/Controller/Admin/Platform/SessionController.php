@@ -32,7 +32,7 @@ final class SessionController extends AbstractController
         $this->staffToken($request);
         $user = $request->user();
 
-        return $this->success(['id' => (string) $user->getKey(), 'username' => $user->email, 'nickname' => $user->name]);
+        return $this->success(['id' => (string) $user->getKey(), 'username' => $user->username ?? $user->email, 'nickname' => $user->name]);
     }
 
     public function menus(Request $request): JsonResponse

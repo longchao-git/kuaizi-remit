@@ -16,6 +16,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property string|null $username 后台专用登录名，不通过会员资料接口分配
  * @property string|null $phone_e164
  * @property Carbon|null $email_verified_at
  * @property string $password
