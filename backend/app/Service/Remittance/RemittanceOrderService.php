@@ -53,6 +53,18 @@ final class RemittanceOrderService
         return $order === null ? Result::fail('订单不存在', 404) : Result::success($this->format($order, paymentDetails: true));
     }
 
+    /** 先校验会员归属再访问上游，刷新后重新生成会员视图，不能返回员工字段。 */
+    public function refreshForMember(string $reference, int $member): Result
+    {
+        $reference = strtolower($reference);
+        if ($this->orders->find($reference, $member) === null) {
+            return Result::fail('订单不存在', 404);
+        }
+        $result = $this->refresh($reference);
+
+        return $result->isFail() ? $result : $this->details($reference, $member);
+    }
+
     /** 员工按订单查看持久化的快照，不返回用户付款链接。 */
     public function staffDetails(string $reference): Result
     {
@@ -197,6 +209,8 @@ final class RemittanceOrderService
     {
         $result = [
             'reference' => $order->reference,
+            'can_refresh' => is_string($order->provider_trade_id) && $order->provider_trade_id !== '',
+            'declaration' => $order->declaration,
             'principal_minor' => (int) $order->principal_minor,
             'income_code' => $order->income_code,
             'outgoing_code' => $order->outgoing_code,

@@ -18,6 +18,23 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/** 保留字段位置供表单提示；不在日志或页面回显任意接口对象。 */
+export class ValidationError extends Error {
+  readonly fields: Record<string, string[]> = {};
+
+  constructor(fields: unknown) {
+    super('请核对填写内容');
+    this.name = 'ValidationError';
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return;
+    for (const [key, messages] of Object.entries(fields).slice(0, 40)) {
+      if (/^[a-zA-Z0-9_.]{1,80}$/.test(key) && Array.isArray(messages)) {
+        const safe = messages.filter((item): item is string => typeof item === 'string' && item.length <= 200).slice(0, 3);
+        if (safe.length) this.fields[key] = safe;
+      }
+    }
+  }
+}
+
 let unauthorizedHandler: ((error: UnauthorizedError) => void | Promise<void>) | null = null;
 
 export function setUnauthorizedHandler(handler: (error: UnauthorizedError) => void | Promise<void>): void {
@@ -45,6 +62,11 @@ function resolveResponse<T>(response: { data: ApiResponse<T>; statusCode?: numbe
   if (statusCode === 401 || responseCode === 401) {
     const message = (data && (data.message || data.msg)) || '登录状态已过期';
     return handleUnauthorized ? rejectUnauthorized(message) : Promise.reject(new UnauthorizedError(message));
+  }
+
+  if (statusCode === 422 && data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+    && Object.values(data.data).some(Array.isArray)) {
+    return Promise.reject(new ValidationError(data.data));
   }
 
   if (statusCode < 200 || statusCode >= 300) {

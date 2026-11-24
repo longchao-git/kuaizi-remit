@@ -10,6 +10,7 @@ use Illuminate\Support\Carbon;
  * @property string $reference
  * @property int $member_id
  * @property array $snapshot
+ * @property array|null $declaration
  * @property Carbon $created_at
  * @property Carbon|null $draft_saved_at
  */
@@ -18,5 +19,5 @@ final class RemittanceQuoteRecord extends Model
 {
     protected $table = 'remittance_quote_records';
 
-    protected $casts = ['snapshot' => 'array', 'draft_saved_at' => 'datetime'];
+    protected $casts = ['snapshot' => 'array', 'draft_saved_at' => 'datetime', 'declaration' => 'encrypted:array'];
 }

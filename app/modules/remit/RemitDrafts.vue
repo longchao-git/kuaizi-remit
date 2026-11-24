@@ -22,12 +22,14 @@
 </template>
 
 <script lang="ts">
+import type { RemittanceDeclaration } from './remittanceDeclaration';
 export interface RemitDraft {
   record_no: string;
   principal_minor: number;
   payment_method: 'sepa' | 'applePay' | 'card';
   payout_method: 'wechat' | 'bank';
   draft_saved_at: string;
+  declaration?: RemittanceDeclaration;
 }
 </script>
 

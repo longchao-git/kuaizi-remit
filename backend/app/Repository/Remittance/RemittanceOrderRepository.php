@@ -65,13 +65,18 @@ final class RemittanceOrderRepository extends AbstractRepository
             ->first();
     }
 
-    public function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash): RemittanceOrder
+    public function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash, ?array $declaration = null): RemittanceOrder
     {
-        return $this->query()->createOrFirst(['quote_reference' => $quote], [
+        $order = $this->query()->createOrFirst(['quote_reference' => $quote], [
             'reference' => (string) Str::uuid(), 'member_id' => $member, 'white_label' => $whiteLabel, 'quote_snapshot' => $snapshot,
             'principal_minor' => $snapshot['principal_minor'], 'payment_request_id' => (string) Str::uuid(), 'payment_request_hash' => $hash,
             'income_code' => '02', 'outgoing_code' => '01', 'refund_code' => '00',
         ]);
+        if ($order->wasRecentlyCreated) {
+            $order->forceFill(['declaration' => $declaration])->saveOrFail();
+        }
+
+        return $order;
     }
 
     public function getForQuote(int $member, string $quote): ?RemittanceOrder

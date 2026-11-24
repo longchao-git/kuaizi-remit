@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
 import { getErrorMessage } from '@/shared/utils/error';
 import { formatAmount } from './previewOrder';
@@ -81,10 +81,14 @@ interface Order {
     channel_fee_minor?: number;
   };
   payment_url?: string | null;
+  can_refresh?: boolean;
+  income_code?: string;
+  outgoing_code?: string;
+  refund_code?: string;
 }
 
 const emit = defineEmits<{ expired: []; detail: [open: boolean]; support: [reference: string] }>();
-const props = defineProps<{ initialOrder?: string; detailOnly?: boolean }>();
+const props = withDefaults(defineProps<{ initialOrder?: string; detailOnly?: boolean; pageVisible?: boolean }>(), { pageVisible: true });
 const path = 'app/remittance/orders';
 const options = { handleUnauthorized: false };
 const items = ref<Order[]>([]);
@@ -94,6 +98,45 @@ const busy = ref(false);
 const page = ref(1);
 const pages = ref(0);
 let active = true;
+let awaitingReturn = false;
+let poll: ReturnType<typeof setTimeout> | undefined;
+let remainingPolls = 0;
+
+async function fetchOrder(reference: string, queryProvider: boolean): Promise<Order> {
+  return queryProvider
+    ? request.post<Order>(`${path}/${reference}/refresh`, {}, options)
+    : request.get<Order>(`${path}/${reference}`, {}, options);
+}
+
+function unsettled(order: Order): boolean {
+  return order.can_refresh === true && order.refund_code !== '04'
+    && !(order.income_code === '00' && order.outgoing_code === '05' && order.refund_code === '00')
+    && !(['05', '06', '07', '08'].includes(order.income_code ?? '') && order.refund_code === '00');
+}
+
+function returned() {
+  if (!awaitingReturn || !active || !props.pageVisible || busy.value) return;
+  awaitingReturn = false;
+  remainingPolls = 2;
+  void refreshDetail(true);
+}
+
+async function refreshDetail(automatic = false) {
+  const reference = detail.value?.reference;
+  if (!reference) return;
+  clearTimeout(poll);
+  let succeeded = false;
+  await run(async () => {
+    const fresh = await fetchOrder(reference, detail.value?.can_refresh === true);
+    if (!active || detail.value?.reference !== reference) return;
+    detail.value = fresh;
+    succeeded = true;
+  });
+  if (automatic && succeeded && active && props.pageVisible && detail.value && unsettled(detail.value) && remainingPolls > 0) {
+    remainingPolls -= 1;
+    poll = setTimeout(() => { void refreshDetail(true); }, 12000);
+  }
+}
 
 function statusTone(order: Order) {
   if (order.status_label === '已下发') return 'tone-success';
@@ -151,13 +194,14 @@ function continuePayment() {
     let opened = false;
     try {
     // #endif
-      const fresh = await request.get<Order>(path + '/' + reference, {}, options);
+      const fresh = await fetchOrder(reference, detail.value?.can_refresh === true);
       detail.value = fresh;
       if (!fresh.payment_url || !/^https:\/\//.test(fresh.payment_url)) {
         throw new Error('付款链接已不可用，请查看最新订单状态');
       }
+      awaitingReturn = true;
       // #ifdef APP-PLUS
-      plus.runtime.openURL(fresh.payment_url, () => { error.value = '无法打开付款页面'; });
+      plus.runtime.openURL(fresh.payment_url, () => { awaitingReturn = false; error.value = '无法打开付款页面'; });
       // #endif
       // #ifdef H5
       paymentWindow.location.replace(fresh.payment_url);
@@ -173,6 +217,8 @@ function back(): boolean {
   if (busy.value) return true;
   if (!detail.value) return false;
   detail.value = undefined;
+  clearTimeout(poll);
+  awaitingReturn = false;
   error.value = '';
   emit('detail', false);
   if (!items.value.length) void load(1);
@@ -181,11 +227,37 @@ function back(): boolean {
 
 function reload() {
   const reference = detail.value?.reference ?? (props.detailOnly ? props.initialOrder : undefined);
-  return reference ? open(reference) : load(page.value);
+  return detail.value ? refreshDetail() : reference ? open(reference) : load(page.value);
 }
 
-onMounted(() => props.initialOrder ? open(props.initialOrder) : load(1));
-onUnmounted(() => { active = false; });
+watch(() => props.pageVisible, (visible) => {
+  if (visible) returned();
+  else clearTimeout(poll);
+});
+// #ifdef H5
+function visibilityChanged() {
+  if (document.visibilityState === 'visible') returned();
+  else clearTimeout(poll);
+}
+// #endif
+onMounted(async () => {
+  // #ifdef H5
+  document.addEventListener('visibilitychange', visibilityChanged);
+  // #endif
+  if (props.initialOrder) {
+    await open(props.initialOrder);
+    if (active && detail.value?.can_refresh) await refreshDetail();
+  } else {
+    await load(1);
+  }
+});
+onUnmounted(() => {
+  active = false;
+  clearTimeout(poll);
+  // #ifdef H5
+  document.removeEventListener('visibilitychange', visibilityChanged);
+  // #endif
+});
 defineExpose({ back });
 </script>
 

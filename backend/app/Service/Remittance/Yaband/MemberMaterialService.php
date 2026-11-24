@@ -8,9 +8,12 @@ use App\Model\Remittance\YabandMaterialRequest;
 use App\Repository\Remittance\RemittanceOrderRepository;
 use App\Repository\Remittance\YabandMaterialRequestRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
+use App\Repository\System\UserRepository;
+use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -23,14 +26,26 @@ final class MemberMaterialService
         private RemittanceOrderRepository $orders,
         private YabandRemitMemberRepository $members,
         private YabandRemitClient $yaband,
+        private UserRepository $users,
+        private DatabaseManager $database,
+        private MemberMaterialReminder $reminder,
+        private MemberNotificationService $notices,
     ) {}
 
-    public function page(int $page, ?int $member): Result
+    public function page(int $page, ?int $member, array $filters = []): Result
     {
-        $rows = $this->tasks->page($page, $member);
+        $rows = $this->tasks->page($page, $member, $filters);
         $items = array_map(fn (YabandMaterialRequest $task) => $this->present($task, $member === null), $rows->items());
 
         return Result::success(PaginationPayload::from($items, $rows->total(), $page, $rows->perPage())->toArray());
+    }
+
+    /** 仅由具备补件管理权限的控制器调用。 */
+    public function staffShow(string $reference): Result
+    {
+        $task = $this->tasks->findForStaff($reference);
+
+        return $task === null ? Result::fail('补件任务不存在', 404) : Result::success($this->present($task, true));
     }
 
     /** 只返回当前会员的任务，不向会员暴露上游qno或其他会员资料。 */
@@ -45,13 +60,42 @@ final class MemberMaterialService
     public function register(array $input): Result
     {
         $member = (int) $input['member_id'];
+        $lock = Cache::lock('yaband-remit:kyc:'.$member, 75);
+        if (! $lock->get()) {
+            return Result::fail('会员身份或补件正在处理，请稍后重试', 409);
+        }
+        try {
+            $result = $this->database->transaction(function () use ($input, $member): Result {
+                $user = $this->users->lockMember($member);
+                if ($user === null || $user->member_closed_at !== null) {
+                    return Result::fail('找不到可接收补件的会员', 404);
+                }
+
+                return $this->record($input);
+            });
+            if ($result->isSuccess()) {
+                $this->notices->refreshInbox($member);
+            }
+
+            return $result;
+        } catch (YabandException) {
+            return Result::fail('补件任务与提醒尚未保存成功，请重试', 503);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** 会员锁内保存任务及提醒，相同问题编号不能覆盖其他任务。 */
+    private function record(array $input): Result
+    {
+        $member = (int) $input['member_id'];
         $order = isset($input['order_reference']) ? strtolower($input['order_reference']) : null;
         if ($this->members->findFor($member)?->uid === null || ($order !== null && $this->orders->find($order, $member) === null)) {
             return Result::fail('找不到已关联雅本的会员或本人订单', 404);
         }
 
         $deadline = Carbon::createFromTimestampUTC($input['deadline_at']);
-        if ($deadline->isPast()) {
+        if ($deadline->lte(now()) || $deadline->timestamp > 2147483647) {
             return Result::fail('补件截止时间必须晚于当前时间', 422);
         }
         $task = $this->tasks->register($input['question_id'], [
@@ -61,6 +105,8 @@ final class MemberMaterialService
             || $task->instruction !== $input['instruction'] || $task->deadline_at->timestamp !== $deadline->timestamp) {
             return Result::fail('雅本问题编号已用于其他补件任务', 409);
         }
+
+        $this->reminder->send($task, (string) config('yaband_remit.mid'));
 
         return Result::success($this->present($task, true));
     }
@@ -93,7 +139,7 @@ final class MemberMaterialService
             if ($task->status === '6002' && hash_equals($task->submission_hash ?? '', $hash)) {
                 return Result::success($this->present($task));
             }
-            if ($task->status !== '6001' || $task->deadline_at->isPast()) {
+            if ($task->status !== '6001' || $task->deadline_at->lte(now())) {
                 return Result::fail('补件任务已关闭或过期', 409);
             }
             if (! app()->bound(YabandRemitSigner::class)) {
@@ -138,7 +184,7 @@ final class MemberMaterialService
 
     private function present(YabandMaterialRequest $task, bool $staff = false): array
     {
-        $status = $task->status === '6001' && $task->deadline_at->isPast() ? '6003' : $task->status;
+        $status = $task->status === '6001' && $task->deadline_at->lte(now()) ? '6003' : $task->status;
         $item = [
             'reference' => $task->reference,
             'order_reference' => $task->order_reference,
@@ -146,6 +192,7 @@ final class MemberMaterialService
             'deadline_at' => $task->deadline_at->toISOString(),
             'status' => $status,
             'can_submit' => $status === '6001',
+            'server_now' => now()->toISOString(),
         ];
 
         return $staff ? [...$item, 'question_id' => $task->question_id, 'member_id' => (string) $task->member_id] : $item;

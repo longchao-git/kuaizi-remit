@@ -22,7 +22,8 @@ final class MemberDraftController extends AbstractController
 
     public function save(Request $request, string $reference): JsonResponse
     {
-        $result = $this->drafts->save((int) $request->user()->getKey(), $reference);
+        $input = $request->validate(['declaration' => ['sometimes', 'array']]);
+        $result = $this->drafts->save((int) $request->user()->getKey(), $reference, $input['declaration'] ?? null);
 
         return $result->isSuccess() ? $this->success($result->getData()) : ResponseResult::json($result, 404);
     }

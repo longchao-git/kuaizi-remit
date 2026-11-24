@@ -11,7 +11,6 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use JsonException;
-use Ramsey\Uuid\Uuid;
 use stdClass;
 
 /** 已验签的question通知只定位已有会员，任务及提醒一起落库，不从通知创建身份或订单。 */
@@ -24,6 +23,7 @@ final class MemberMaterialNoticeService
         private UserRepository $users,
         private MemberNotificationService $notices,
         private DatabaseManager $database,
+        private MemberMaterialReminder $reminder,
     ) {}
 
     /** 签名在Controller先核对；此处校验问卷内容并与身份变更、注销共用会员锁。 */
@@ -105,16 +105,7 @@ final class MemberMaterialNoticeService
             || $task->instruction !== $data['q_description'] || $task->deadline_at->timestamp !== $data['timeout_at']) {
             return Result::fail('补件问题编号已用于不同的任务，请核对通知', 409);
         }
-        if ($task->status === '6001' && $task->deadline_at->gt(now())) {
-            $requestId = Uuid::uuid5(Uuid::NAMESPACE_URL, json_encode(['yaband-question', $data['mid'], $member, $data['qno']], JSON_THROW_ON_ERROR));
-            $notice = $this->notices->send($member, null, [
-                'request_id' => (string) $requestId, 'title' => '需要补充资料',
-                'body' => '请查看补件要求，并在截止时间前提交。', 'material_reference' => $task->reference,
-            ], broadcast: false);
-            if ($notice->isFail()) {
-                throw new YabandException('无法保存补件提醒。');
-            }
-        }
+        $this->reminder->send($task, (string) $data['mid']);
 
         return Result::success();
     }

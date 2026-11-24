@@ -68,7 +68,10 @@ final class YabandCheckoutReadinessTest extends TestCase
             'channel_fee_minor' => 80, 'total_payable_minor' => 10150, 'payment_method' => 'card', 'payout_method' => 'bank',
             'expires_at' => now()->addMinutes(2)->timestamp, 'mode' => 'locked', 'can_submit' => true, 'coupon_id' => $coupon->id,
         ]);
-        $this->input = ['quote_reference' => $quote->reference, 'payout_account' => (string) Str::uuid()];
+        $this->input = [
+            'quote_reference' => $quote->reference, 'payout_account' => (string) Str::uuid(),
+            'declaration' => ['source_of_funds' => '02', 'purpose' => '03', 'explanation' => ''],
+        ];
         $this->withToken($this->member->createToken('member')->plainTextToken);
         $this->app->instance(YabandRemitSigner::class, new class implements YabandRemitSigner
         {
@@ -89,6 +92,8 @@ final class YabandCheckoutReadinessTest extends TestCase
 
             public ?array $preparedOverride = null;
 
+            public ?array $receivedDeclaration = null;
+
             public function accounts(User $member, string $payoutMethod): array
             {
                 return [];
@@ -97,6 +102,7 @@ final class YabandCheckoutReadinessTest extends TestCase
             public function prepare(User $member, array $snapshot, string $payoutAccount, string $ip): array
             {
                 $this->prepares++;
+                $this->receivedDeclaration = $snapshot['declaration'] ?? null;
                 if ($this->onPrepare !== null) {
                     ($this->onPrepare)();
                 }
@@ -161,6 +167,36 @@ final class YabandCheckoutReadinessTest extends TestCase
             [['customer_fee' => null]], [['device' => null]], [['timeout' => '1441']],
             [['sub_pay_method' => 'IDEAL']], [['sub_pay_method' => 'SEPA']],
         ];
+    }
+
+    public function test_missing_or_incomplete_user_declaration_is_rejected_before_any_upstream_request(): void
+    {
+        $input = $this->input;
+        unset($input['declaration']);
+        $this->postJson('/app/remittance/orders', $input)->assertUnprocessable()
+            ->assertJsonStructure(['data' => ['declaration.source_of_funds', 'declaration.purpose']]);
+        $this->postJson('/app/remittance/orders', [...$this->input, 'declaration' => ['source_of_funds' => '02', 'purpose' => '05']])
+            ->assertUnprocessable()->assertJsonStructure(['data' => ['declaration.explanation']]);
+        $this->assertSame(0, $this->terms->prepares);
+        $this->assertNothingReservedOrPaid();
+        Http::assertNothingSent();
+    }
+
+    public function test_adapter_cannot_replace_the_confirmed_declaration_and_saved_order_keeps_it_encrypted(): void
+    {
+        $this->terms->fieldChanges = ['payee' => ['source_of_funds' => '01']];
+        $this->postJson('/app/remittance/orders', $this->input)->assertServiceUnavailable();
+        $this->assertNothingReservedOrPaid();
+        $this->terms->fieldChanges = [];
+        $reference = $this->postJson('/app/remittance/orders', $this->input)->assertOk()->json('data.reference');
+        $this->assertSame($this->input['declaration'], $this->terms->receivedDeclaration);
+        $order = RemittanceOrder::query()->where('reference', $reference)->sole();
+        $this->assertSame($this->input['declaration'], $order->declaration);
+        $this->assertStringNotContainsString('source_of_funds', $order->getRawOriginal('declaration'));
+        $this->getJson('/app/remittance/orders/'.$reference)->assertOk()->assertJsonPath('data.declaration.purpose', '03');
+        $this->postJson('/app/remittance/orders', [...$this->input, 'declaration' => ['source_of_funds' => '01', 'purpose' => '03']])
+            ->assertConflict();
+        $this->assertCount(1, $this->payments());
     }
 
     public function test_white_label_validation_precedes_reservation_and_valid_requests_use_only_white_path(): void

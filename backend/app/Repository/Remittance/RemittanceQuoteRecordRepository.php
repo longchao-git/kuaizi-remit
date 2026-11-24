@@ -44,13 +44,18 @@ final class RemittanceQuoteRecordRepository extends AbstractRepository
     }
 
     /** 会员只能维护自己的草稿，重复保存保留第一次的时间。 */
-    public function saveDraft(int $member, string $reference): ?RemittanceQuoteRecord
+    public function saveDraft(int $member, string $reference, ?array $declaration = null): ?RemittanceQuoteRecord
     {
         $query = $this->query()->where('member_id', $member)->where('reference', strtolower($reference));
         $query->where('snapshot->mode', 'local_estimate');
         (clone $query)->whereNull('draft_saved_at')->update(['draft_saved_at' => now()]);
 
-        return $query->first();
+        $record = $query->lockForUpdate()->first();
+        if ($record !== null && $declaration !== null) {
+            $record->forceFill(['declaration' => $declaration])->saveOrFail();
+        }
+
+        return $record;
     }
 
     public function drafts(int $member, int $page): LengthAwarePaginator

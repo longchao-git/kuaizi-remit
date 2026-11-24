@@ -52,6 +52,8 @@ interface Task {
   instruction: string;
   status: '6001' | '6002' | '6003';
   can_submit: boolean;
+  server_now?: string;
+  received_at?: number;
 }
 
 interface Attachment {
@@ -67,11 +69,15 @@ const options = { handleUnauthorized: false };
 const labels = { '6001': '待提交', '6002': '已完成', '6003': '已过期' };
 const items = ref<Task[]>([]);
 const targetTask = ref<Task>();
+const clock = ref(Date.now());
 const displayedTasks = computed(() => {
   const target = targetTask.value;
-  if (!target) return items.value;
-  return [items.value.find(task => task.reference === target.reference) ?? target,
-    ...items.value.filter(task => task.reference !== target.reference)];
+  const tasks = target ? [items.value.find(task => task.reference === target.reference) ?? target,
+    ...items.value.filter(task => task.reference !== target.reference)] : items.value;
+  return tasks.map(task => {
+    const expired = isExpired(task);
+    return { ...task, status: expired ? '6003' as const : task.status, can_submit: task.can_submit && !expired };
+  });
 });
 const file = ref<Attachment>();
 const selected = ref('');
@@ -88,6 +94,18 @@ formats = 'PDF、JPG、PNG';
 // #endif
 let active = true;
 let uploadInProgress: Attachment | undefined;
+let timer: ReturnType<typeof setInterval> | undefined;
+
+function received(task: Task): Task {
+  return { ...task, received_at: Date.now() };
+}
+
+function isExpired(task: Task): boolean {
+  const server = Date.parse(task.server_now ?? '');
+  const current = Number.isFinite(server) && task.received_at !== undefined
+    ? server + Math.max(0, clock.value - task.received_at) : clock.value;
+  return task.status === '6001' && Date.parse(task.deadline_at) <= current;
+}
 
 function release(attachment?: Attachment) {
   // #ifdef APP-PLUS
@@ -128,14 +146,14 @@ async function refreshTasks(next: number) {
   if (!active) {
     return;
   }
-  items.value = result.list;
+  items.value = result.list.map(received);
   page.value = result.page;
   pages.value = result.total_pages;
   if (props.targetReference) {
     const linked = result.list.find(task => task.reference === props.targetReference)
       ?? await request.get<Task>(`${path}/${encodeURIComponent(props.targetReference)}`, {}, options);
     if (!active) return;
-    targetTask.value = linked;
+    targetTask.value = received(linked);
   }
   if (selected.value && !displayedTasks.value.some(task => task.reference === selected.value && task.can_submit)) {
     selected.value = '';
@@ -271,6 +289,11 @@ function upload(url: string, path: string, message: string): Promise<Task> {
 
 function submit(task: Task) {
   if (choosing.value) return;
+  clock.value = Date.now();
+  if (!task.can_submit || isExpired(task)) {
+    error.value = '补件任务已关闭或过期，请刷新查看';
+    return;
+  }
   return run(async () => {
     const url = path + '/' + task.reference;
     const attachment = file.value;
@@ -279,7 +302,8 @@ function submit(task: Task) {
       const result = attachment ? await upload(url, attachment.path, reply.value.trim())
         : await request.post<Task>(url, { reply: reply.value.trim() }, options);
       if (active) {
-        items.value = items.value.map(item => item.reference === task.reference ? result : item);
+        items.value = items.value.map(item => item.reference === task.reference ? received(result) : item);
+        if (targetTask.value?.reference === result.reference) targetTask.value = received(result);
         selected.value = '';
         replaceFile();
         reply.value = '';
@@ -304,11 +328,13 @@ function submit(task: Task) {
 }
 
 onMounted(() => run(async () => {
+  timer = setInterval(() => { clock.value = Date.now(); }, 1000);
   await refreshTasks(1);
   if (active && targetTask.value?.can_submit) selected.value = targetTask.value.reference;
 }));
 onUnmounted(() => {
   active = false;
+  clearInterval(timer);
   if (file.value !== uploadInProgress) release(file.value);
 });
 </script>

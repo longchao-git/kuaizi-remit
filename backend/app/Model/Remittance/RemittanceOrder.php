@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $provider_trade_id
  * @property string|null $quote_reference
  * @property array|null $quote_snapshot
+ * @property array|null $declaration
  * @property string|null $payment_request_id
  * @property string|null $payment_request_hash
  * @property string|null $payment_url
@@ -39,6 +40,7 @@ final class RemittanceOrder extends Model
             'provider_sync_attempted_at' => 'datetime',
             'quote_snapshot' => 'array',
             'payment_url' => 'encrypted',
+            'declaration' => 'encrypted:array',
         ];
     }
 }

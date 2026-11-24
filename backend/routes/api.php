@@ -21,6 +21,7 @@ use App\Controller\Common\MemberKycController;
 use App\Controller\Common\MemberMaterialController;
 use App\Controller\Common\MemberNotificationController;
 use App\Controller\Common\MemberOrderController;
+use App\Controller\Common\MemberPayoutAccountDraftController;
 use App\Controller\Common\MemberPushDeviceController;
 use App\Controller\Common\MemberQuoteController;
 use App\Controller\Common\MemberSessionController;
@@ -100,6 +101,7 @@ Route::middleware('auth:sanctum')->prefix('admin/remittance')->group(function ()
         ->middleware([RequirePlatformPermission::class.':'.RemittancePermission::SYNC_ORDERS, 'throttle:15,1,remit-order-refresh:']);
     Route::middleware(RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_MATERIALS)->group(function () {
         Route::get('/materials', [MemberMaterialController::class, 'adminIndex']);
+        Route::get('/materials/{reference}', [MemberMaterialController::class, 'adminShow'])->whereUuid('reference');
         Route::post('/materials', [MemberMaterialController::class, 'register'])->middleware('throttle:20,1,remit-material-register:');
     });
     Route::post('/margin-preview', RemittanceMarginController::class)
@@ -142,7 +144,12 @@ Route::middleware(['auth:sanctum', RequireMemberToken::class])->prefix('app')->g
     Route::get('/remittance/orders', [MemberOrderController::class, 'index']);
     Route::post('/remittance/orders', [MemberOrderController::class, 'checkout'])->middleware('throttle:10,1,remit-order-checkout:');
     Route::get('/remittance/payout-accounts', [MemberOrderController::class, 'accounts'])->middleware('throttle:30,1,remit-payout-accounts:');
+    Route::get('/remittance/payout-account-drafts', [MemberPayoutAccountDraftController::class, 'index']);
+    Route::put('/remittance/payout-account-drafts/{reference}', [MemberPayoutAccountDraftController::class, 'save'])
+        ->whereUuid('reference')->middleware('throttle:20,1,remit-payout-draft-save:');
     Route::get('/remittance/orders/{reference}', [MemberOrderController::class, 'show'])->whereUuid('reference');
+    Route::post('/remittance/orders/{reference}/refresh', [MemberOrderController::class, 'refresh'])
+        ->whereUuid('reference')->middleware('throttle:6,1,remit-member-order-refresh:');
     Route::get('/remittance/materials', [MemberMaterialController::class, 'memberIndex']);
     Route::get('/remittance/materials/{reference}', [MemberMaterialController::class, 'show'])->whereUuid('reference');
     Route::post('/remittance/materials/{reference}', [MemberMaterialController::class, 'submit'])

@@ -5,6 +5,16 @@
       <el-button type="primary" @click="openForm">登记雅本补件</el-button>
     </header>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
+    <el-form inline @submit.prevent="load(1)">
+      <el-form-item label="会员编号"><el-input v-model.trim="filters.member_id" maxlength="18" clearable /></el-form-item>
+      <el-form-item label="问题编号"><el-input v-model.trim="filters.question_id" maxlength="200" clearable /></el-form-item>
+      <el-form-item label="状态">
+        <el-select v-model="filters.status" clearable placeholder="全部" style="width: 140px">
+          <el-option v-for="(label, value) in labels" :key="value" :label="label" :value="value" />
+        </el-select>
+      </el-form-item>
+      <el-button native-type="submit" :loading="loading">查询</el-button>
+    </el-form>
     <el-card class="remit-card" shadow="never">
       <template #header><h2>补件任务</h2></template>
       <el-table scrollbar-always-on v-loading="loading" :data="rows" :empty-text="error ? '读取失败' : '暂无补件任务'">
@@ -17,6 +27,9 @@
         </el-table-column>
         <el-table-column label="状态" width="98">
           <template #default="{ row }">{{ labels[row.status as keyof typeof labels] }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }"><el-button link type="primary" @click="showDetail(row)">详情</el-button></template>
         </el-table-column>
       </el-table>
       <el-pagination v-if="total > 20" :current-page="page" :page-size="20" :total="total" :disabled="loading"
@@ -36,6 +49,19 @@
         <el-button native-type="submit" type="primary" :loading="saving">保存</el-button>
       </el-form>
     </el-dialog>
+    <el-dialog v-model="detailOpen" title="补件详情" width="min(700px, 94vw)">
+      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
+      <div v-loading="detailLoading">
+        <el-descriptions v-if="detail" :column="1" border>
+          <el-descriptions-item label="会员编号">{{ detail.member_id }}</el-descriptions-item>
+          <el-descriptions-item label="问题编号">{{ detail.question_id }}</el-descriptions-item>
+          <el-descriptions-item label="订单编号">{{ detail.order_reference || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ labels[detail.status] }}</el-descriptions-item>
+          <el-descriptions-item label="截止时间">{{ new Date(detail.deadline_at).toLocaleString() }}</el-descriptions-item>
+        </el-descriptions>
+        <pre v-if="detail" class="material-instruction">{{ detail.instruction }}</pre>
+      </div>
+    </el-dialog>
   </section>
 </template>
 
@@ -47,6 +73,7 @@ import type { Page } from './repository/remitOperationsRepository'
 
 const labels = { '6001': '待提交', '6002': '已完成', '6003': '已过期' }
 interface Task {
+  reference: string
   member_id: string
   order_reference: string | null
   question_id: string
@@ -64,6 +91,12 @@ const saving = ref(false)
 const error = ref('')
 const formError = ref('')
 const dialogOpen = ref(false)
+const filters = reactive({ member_id: '', question_id: '', status: '' })
+const detail = ref<Task>()
+const detailOpen = ref(false)
+const detailLoading = ref(false)
+const detailError = ref('')
+let detailRequest = 0
 const form = reactive({ memberId: '', order: '', question: '', instruction: '', deadline: null as Date | null })
 
 function openForm() {
@@ -77,7 +110,8 @@ async function load(next: number) {
   loading.value = true
   error.value = ''
   try {
-    const data = await get<Page<Task>>(path, { page: next })
+    const query = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ''))
+    const data = await get<Page<Task>>(path, { page: next, ...query })
     rows.value = data.list
     total.value = data.total
     page.value = data.page
@@ -85,6 +119,23 @@ async function load(next: number) {
     error.value = getErrorMessage(reason, '读取补件任务失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function showDetail(task: Task) {
+  const request = ++detailRequest
+  detailOpen.value = true
+  detail.value = undefined
+  detailError.value = ''
+  detailLoading.value = true
+  const reference = task.reference
+  try {
+    const result = await get<Task>(`${path}/${reference}`)
+    if (detailOpen.value && request === detailRequest) detail.value = result
+  } catch (reason) {
+    if (request === detailRequest) detailError.value = getErrorMessage(reason, '读取补件详情失败')
+  } finally {
+    if (request === detailRequest) detailLoading.value = false
   }
 }
 
@@ -98,9 +149,13 @@ async function submit() {
 
   saving.value = true
   try {
+    const deadline = Math.floor(form.deadline.getTime() / 1000)
+    if (deadline <= Date.now() / 1000 || deadline > 2147483647) {
+      throw new Error('截止时间须晚于现在，且不晚于 2038 年 1 月 19 日 03:14:07 UTC')
+    }
     await post<Task>(path, {
       member_id: form.memberId, order_reference: form.order || null, question_id: form.question,
-      instruction: form.instruction, deadline_at: Math.floor(form.deadline.getTime() / 1000)
+      instruction: form.instruction, deadline_at: deadline
     })
     dialogOpen.value = false
     await load(1)
@@ -119,4 +174,5 @@ onMounted(() => { void load(1) })
 .materials-page h1 { margin: 0; }
 .materials-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .el-alert + .el-button { margin-top: 12px; }
+.material-instruction { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; font: inherit; }
 </style>

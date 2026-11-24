@@ -20,7 +20,19 @@ final class MemberMaterialController extends AbstractController
 
     public function adminIndex(Request $request): JsonResponse
     {
-        return $this->index($request, null);
+        $filters = $request->validate([
+            'page' => ['sometimes', 'integer', 'between:1,1000000'],
+            'member_id' => ['sometimes', 'integer', 'min:1'],
+            'question_id' => ['sometimes', 'string', 'max:200'],
+            'status' => ['sometimes', 'in:6001,6002,6003'],
+        ]);
+
+        return $this->respond($this->materials->page((int) ($filters['page'] ?? 1), null, $filters));
+    }
+
+    public function adminShow(string $reference): JsonResponse
+    {
+        return $this->respond($this->materials->staffShow(strtolower($reference)));
     }
 
     /** 按当前会员读取消息关联任务，避免目标不在第一页时无法打开。 */
@@ -36,7 +48,7 @@ final class MemberMaterialController extends AbstractController
             'order_reference' => ['nullable', 'uuid'],
             'question_id' => ['required', 'string', 'max:200'],
             'instruction' => ['required', 'string', 'max:500'],
-            'deadline_at' => ['required', 'integer:strict', 'between:1,253402300799'],
+            'deadline_at' => ['required', 'integer:strict', 'between:1,2147483647'],
         ]);
 
         return $this->respond($this->materials->register($input));

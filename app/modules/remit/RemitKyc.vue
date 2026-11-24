@@ -2,8 +2,10 @@
   <view class="body kyc">
     <text class="heading">{{ heading }}</text>
     <text v-if="error" class="description offer" role="alert">{{ error }}</text>
+    <text v-if="status?.guidance" class="description">{{ status.guidance }}</text>
     <view v-if="status?.registered" class="card status-card">
       <view class="line"><text>身份验证</text><text>{{ idvLabel }}</text></view>
+      <view class="line"><text>身份资料</text><text>{{ profileLabel }}</text></view>
       <view class="line"><text>汇款权限</text><text>{{ status.remittance_enabled ? '已开通' : '未开通' }}</text></view>
     </view>
     <button v-if="status && (!status.registered || status.can_start_idv)" class="primary" :disabled="busy" @tap="start">
@@ -15,6 +17,9 @@
       {{ profileOpen ? '收起身份资料' : '填写身份资料' }}
     </button>
     <view v-if="canEditProfile && profileOpen" class="card status-card profile-form">
+      <view v-if="Object.keys(fieldErrors).length" role="alert" class="field-errors">
+        <text v-for="(message, field) in fieldErrors" :key="field">{{ fieldLabels[field] || '身份资料' }}：{{ message }}</text>
+      </view>
       <input v-model="profile.first_name" placeholder="名" maxlength="64" :disabled="busy" />
       <input v-model="profile.last_name" placeholder="姓" maxlength="64" :disabled="busy" />
       <input v-model="profile.nationality" placeholder="国籍代码，如 CN" maxlength="2" :disabled="busy" />
@@ -22,11 +27,11 @@
         <view class="profile-option">{{ documentTypes.find(item => item.value === profile.id_type)?.label ?? '请选择证件类型' }}</view>
       </picker>
       <input v-model="profile.id_number" placeholder="证件号码" maxlength="64" :disabled="busy" />
-      <picker mode="date" :value="profile.expiry_date" :disabled="busy" @change="profile.expiry_date = String($event.detail.value)">
-        <view class="profile-option">{{ profile.expiry_date || '证件有效期至' }}</view>
+      <picker mode="date" :value="profile.expiry_date" :start="status?.server_date" :disabled="busy" @change="profile.expiry_date = String($event.detail.value)">
+        <view class="profile-option" :class="{ invalid: fieldErrors.expiry_date }">{{ profile.expiry_date || '证件有效期至' }}</view>
       </picker>
-      <picker mode="date" :value="profile.birthday" :disabled="busy" @change="profile.birthday = String($event.detail.value)">
-        <view class="profile-option">{{ profile.birthday || '出生日期' }}</view>
+      <picker mode="date" :value="profile.birthday" :end="latestBirthday" :disabled="busy" @change="profile.birthday = String($event.detail.value)">
+        <view class="profile-option" :class="{ invalid: fieldErrors.birthday }">{{ profile.birthday || '出生日期' }}</view>
       </picker>
       <picker :range="genders" range-key="label" :disabled="busy" @change="selectGender">
         <view class="profile-option">{{ genders.find(item => item.value === profile.gender)?.label ?? '请选择性别' }}</view>
@@ -44,7 +49,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import request, { UnauthorizedError } from '@/request/http';
+import request, { UnauthorizedError, ValidationError } from '@/request/http';
 
 interface KycStatus {
   registered: boolean;
@@ -55,6 +60,8 @@ interface KycStatus {
   kyc_status_code?: string;
   idv_status_code?: string;
   profile_status_code?: string;
+  guidance?: string | null;
+  server_date?: string;
 }
 
 const props = defineProps<{ pageVisible: boolean }>();
@@ -63,6 +70,18 @@ const status = ref<KycStatus>();
 const url = ref('');
 const busy = ref(false);
 const error = ref('');
+const fieldErrors = ref<Record<string, string>>({});
+const fieldLabels: Record<string, string> = {
+  first_name: '名', last_name: '姓', nationality: '国籍', id_type: '证件类型', id_number: '证件号码',
+  expiry_date: '证件有效期', birthday: '出生日期', gender: '性别', 'address.country': '居住国家',
+  'address.address_line1': '居住地址', 'address.address_line2': '补充地址', 'address.post_code': '邮政编码', 'address.city': '城市',
+};
+const latestBirthday = computed(() => {
+  if (!status.value?.server_date) return undefined;
+  const date = new Date(status.value.server_date + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+});
 const profileOpen = ref(false);
 const newProfile = () => ({
   first_name: '', last_name: '', nationality: '', id_type: '', id_number: '', expiry_date: '', birthday: '', gender: '',
@@ -85,6 +104,8 @@ const idvLabels: Record<string, string> = {
 };
 const heading = computed(() => status.value ? (kycLabels[status.value.kyc_status_code ?? ''] ?? '身份认证') : '身份认证');
 const idvLabel = computed(() => idvLabels[status.value?.idv_status_code ?? ''] ?? '待查询');
+const profileLabels: Record<string, string> = { '3001': '待提交', '3002': '已批准', '3003': '未获批准', '3004': '需更新资料' };
+const profileLabel = computed(() => profileLabels[status.value?.profile_status_code ?? ''] ?? '待查询');
 const canEditProfile = computed(() => Boolean(
   status.value?.can_submit_profile && !status.value.kyc_passed && status.value.profile_status_code !== '3002',
 ));
@@ -97,6 +118,10 @@ async function run(action: () => Promise<void>) {
     await action();
   } catch (reason) {
     if (reason instanceof UnauthorizedError) emit('expired');
+    else if (reason instanceof ValidationError) {
+      fieldErrors.value = Object.fromEntries(Object.keys(reason.fields).map(field => [field, '请检查该项的格式和范围']));
+      error.value = '身份资料未提交，请检查标出的项目';
+    }
     else error.value = reason instanceof Error ? reason.message : '操作失败，请重试';
   } finally {
     busy.value = false;
@@ -142,6 +167,7 @@ function selectGender(event: { detail: { value: string | number } }) {
 
 function submitProfile() {
   if (!canEditProfile.value) return;
+  fieldErrors.value = {};
   void run(async () => {
     const { address, ...identity } = profile;
     const required = [...Object.values(identity), address.country, address.address_line1, address.post_code, address.city];
@@ -149,6 +175,17 @@ function submitProfile() {
     if (!/^[a-z]{2}$/i.test(identity.nationality) || !/^[a-z]{2}$/i.test(address.country)) {
       throw new Error('国籍和居住国家请填写两位字母代码');
     }
+    const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+      && !Number.isNaN(Date.parse(value + 'T00:00:00Z'))
+      && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
+    const today = status.value?.server_date;
+    if (!validDate(identity.expiry_date) || (today && identity.expiry_date < today)) {
+      fieldErrors.value.expiry_date = '请选择尚未到期的有效日期';
+    }
+    if (!validDate(identity.birthday) || (today && identity.birthday >= today)) {
+      fieldErrors.value.birthday = '出生日期必须早于今天';
+    }
+    if (Object.keys(fieldErrors.value).length) throw new Error('请核对证件有效期和出生日期');
     status.value = await request.post<KycStatus>('app/kyc/profile', {
       ...identity,
       nationality: identity.nationality.toUpperCase(),
@@ -156,6 +193,7 @@ function submitProfile() {
     }, options);
     Object.assign(profile, newProfile());
     profileOpen.value = false;
+    fieldErrors.value = {};
     uni.showToast({ title: '已提交身份资料', icon: 'none' });
   });
 }
@@ -163,6 +201,7 @@ function submitProfile() {
 watch(canEditProfile, (allowed) => {
   if (!allowed) {
     profileOpen.value = false;
+    fieldErrors.value = {};
     Object.assign(profile, newProfile());
   }
 });
@@ -172,6 +211,8 @@ onMounted(refresh);
 
 <style scoped>
 .kyc { display: grid; gap: 20rpx; }
+.field-errors { display: grid; gap: 10rpx; color: #b23b3b; font-size: 26rpx; }
+.profile-option.invalid { border-color: #b23b3b; }
 .status-card { display: grid; gap: 14rpx; padding: 24rpx; }
 .profile-form input, .profile-option {
   min-height: 74rpx;

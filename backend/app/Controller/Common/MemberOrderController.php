@@ -30,8 +30,18 @@ final class MemberOrderController extends AbstractController
 
     public function checkout(Request $request, MemberCheckoutService $checkout): JsonResponse
     {
-        $input = $request->validate(['quote_reference' => ['required', 'uuid'], 'payout_account' => ['required', 'uuid']]);
-        $result = $checkout->submit($request->user(), $input['quote_reference'], strtolower($input['payout_account']), $request->ip() ?? '');
+        $input = $request->validate([
+            'quote_reference' => ['required', 'uuid'], 'payout_account' => ['required', 'uuid'], 'declaration' => ['sometimes', 'array'],
+        ]);
+        $result = $checkout->submit($request->user(), $input['quote_reference'], strtolower($input['payout_account']), $request->ip() ?? '', $input['declaration'] ?? null);
+
+        return $result->isSuccess() ? $this->success($result->getData()) : ResponseResult::json($result, $result->getCode());
+    }
+
+    /** 本人主动查单；路由限频，状态更新复用已有核对逻辑。 */
+    public function refresh(Request $request, string $reference): JsonResponse
+    {
+        $result = $this->orders->refreshForMember($reference, (int) $request->user()->getKey());
 
         return $result->isSuccess() ? $this->success($result->getData()) : ResponseResult::json($result, $result->getCode());
     }

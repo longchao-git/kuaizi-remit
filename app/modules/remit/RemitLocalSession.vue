@@ -26,6 +26,7 @@
       v-else-if="confirmation"
       :quote="confirmation.quote"
       :account-label="confirmation.account.label"
+      :declaration="confirmation.declaration"
       :busy="busy"
       :error="error"
       :page-visible="props.pageVisible"
@@ -37,10 +38,12 @@
     <RemitDrafts v-else-if="draftsOpen" @resume="resumeDraft" @expired="expire" />
     <RemitOrders
       v-else-if="ordersOpen && !ticketsOpen" ref="orderView" :initial-order="returnOrder" :detail-only="inboxOpen"
+      :page-visible="props.pageVisible"
       @expired="expire" @detail="orderDetail = $event" @support="supportForOrder"
     />
     <RemitTickets v-else-if="ticketsOpen" ref="tickets" :initial-ticket="noticeTicket" :order-reference="ticketOrder" @expired="expire" />
     <RemitKyc v-else-if="kycOpen" :page-visible="props.pageVisible" @expired="expire" />
+    <RemitPayoutDrafts v-else-if="payoutDraftsOpen" ref="payoutDraftsView" @expired="expire" />
     <RemitMaterials v-else-if="materialsOpen" :target-reference="materialTarget" @expired="expire" />
     <RemitClosure v-else-if="closureOpen" @expired="expire" />
     <RemitSupportConversation
@@ -118,6 +121,21 @@
           <button class="inline-action" :class="{ accent: paymentMethod === 'applePay' }" @tap="paymentMethod = 'applePay'">Apple Pay</button>
           <button class="inline-action" :class="{ accent: paymentMethod === 'card' }" @tap="paymentMethod = 'card'">银行卡</button>
         </view>
+      </view>
+
+      <view class="card declaration-card">
+        <text class="quote-label">资金来源</text>
+        <picker :range="fundSources" range-key="label" :disabled="busy" @change="selectFundSource">
+          <view class="declaration-option">{{ fundSources.find(item => item.value === declaration.source_of_funds)?.label || '请选择资金来源' }}</view>
+        </picker>
+        <text class="quote-label">汇款用途</text>
+        <picker :range="transferPurposes" range-key="label" :disabled="busy" @change="selectTransferPurpose">
+          <view class="declaration-option">{{ transferPurposes.find(item => item.value === declaration.purpose)?.label || '请选择汇款用途' }}</view>
+        </picker>
+        <textarea
+          v-if="declaration.purpose === '05'" v-model="declaration.explanation" maxlength="200"
+          placeholder="请说明具体用途（最多200字）" :disabled="busy" class="declaration-option"
+        />
       </view>
 
       <view v-if="quote" class="quote-breakdown" aria-label="联调报价结果">
@@ -198,7 +216,9 @@ import RemitMaterials from './RemitMaterials.vue';
 import RemitTickets from './RemitTickets.vue';
 import RemitKyc from './RemitKyc.vue';
 import RemitClosure from './RemitClosure.vue';
+import RemitPayoutDrafts from './RemitPayoutDrafts.vue';
 import type { MemberCoupon } from './memberCoupon';
+import { declarationError, emptyDeclaration, fundSources, transferPurposes, type RemittanceDeclaration } from './remittanceDeclaration';
 import { pendingNotice, syncMemberPush } from './memberPush';
 
 interface QuoteEstimate {
@@ -227,7 +247,12 @@ const amount = ref('100');
 const paymentMethod = ref<'sepa' | 'applePay' | 'card'>('sepa');
 const payoutMethod = ref<'bank' | 'wechat'>('bank');
 const quote = ref<QuoteEstimate>();
-const confirmation = ref<{ quote: QuoteEstimate; account: { reference: string; label: string } }>();
+const declaration = ref(emptyDeclaration());
+const confirmation = ref<{
+  quote: QuoteEstimate;
+  account: { reference: string; label: string };
+  declaration: RemittanceDeclaration;
+}>();
 const busy = ref(false);
 const inboxOpen = ref(false);
 const targetNotice = ref<string>();
@@ -239,6 +264,8 @@ const ordersOpen = ref(false);
 const profileOpen = ref(false);
 const settingsOpen = ref(false);
 const materialsOpen = ref(false);
+const payoutDraftsOpen = ref(false);
+const payoutDraftsView = ref<InstanceType<typeof RemitPayoutDrafts>>();
 const materialTarget = ref<string>();
 const closureOpen = ref(false);
 const orderDetail = ref(false);
@@ -265,7 +292,7 @@ let announcementRequest = 0;
 
 const subPageOpen = computed(() =>
   inboxOpen.value || chatOpen.value || helpOpen.value || couponsOpen.value || draftsOpen.value || ordersOpen.value || ticketsOpen.value ||
-  kycOpen.value || materialsOpen.value || closureOpen.value || settingsOpen.value || Boolean(confirmation.value),
+  kycOpen.value || materialsOpen.value || payoutDraftsOpen.value || closureOpen.value || settingsOpen.value || Boolean(confirmation.value),
 );
 const onHome = computed(() => Boolean(member.value) && !subPageOpen.value && !profileOpen.value);
 const onCouponHome = computed(() => onHome.value && props.pageVisible);
@@ -292,6 +319,7 @@ const pageTitle = computed(() => {
   if (ticketsOpen.value) return '客服工单';
   if (ordersOpen.value) return orderDetail.value ? '订单详情' : '汇款订单';
   if (materialsOpen.value) return '补充资料';
+  if (payoutDraftsOpen.value) return '本人收款资料';
   if (inboxOpen.value) return '消息通知';
   if (kycOpen.value) return '身份认证';
   if (closureOpen.value) return '账号注销';
@@ -313,6 +341,7 @@ const accountLinks = computed(() => [
   { label: '我的优惠券', icon: '/static/remit/gift.png', open: () => { couponsOpen.value = true; } },
   { label: '汇款草稿', icon: '/static/remit/document.svg', open: () => { draftsOpen.value = true; } },
   { label: '身份认证', icon: '/static/remit/identity.svg', open: () => { kycOpen.value = true; } },
+  { label: '本人收款资料', icon: '/static/remit/document.svg', open: () => { payoutDraftsOpen.value = true; } },
   { label: '补充资料', icon: '/static/remit/document.svg', open: () => { materialsOpen.value = true; } },
   { label: '消息通知', icon: '/static/remit/mail.svg', open: () => { inboxOpen.value = true; }, badge: inboxCount.value || undefined },
   { label: '帮助与客服', icon: '/static/remit/support.svg', open: () => { helpOpen.value = true; }, badge: unread.value || undefined },
@@ -373,6 +402,8 @@ function back() {
   } else if (materialsOpen.value) {
     materialsOpen.value = false;
     materialTarget.value = undefined;
+  } else if (payoutDraftsOpen.value) {
+    if (!payoutDraftsView.value?.back()) payoutDraftsOpen.value = false;
   } else if (inboxOpen.value) {
     inboxOpen.value = false;
     targetNotice.value = undefined;
@@ -558,6 +589,7 @@ function clearSession() {
   sessionService.clearAuthSession();
   member.value = undefined;
   quote.value = undefined;
+  declaration.value = emptyDeclaration();
   confirmation.value = undefined;
   inboxOpen.value = false;
   inboxCount.value = 0;
@@ -574,6 +606,7 @@ function clearSession() {
   profileOpen.value = false;
   settingsOpen.value = false;
   materialsOpen.value = false;
+  payoutDraftsOpen.value = false;
   materialTarget.value = undefined;
   closureOpen.value = false;
   orderDetail.value = false;
@@ -645,8 +678,18 @@ function choosePayout(labels: string[]): Promise<number | undefined> {
   }));
 }
 
+function selectFundSource(event: { detail: { value: string | number } }) {
+  declaration.value.source_of_funds = fundSources[Number(event.detail.value)]?.value ?? '';
+}
+
+function selectTransferPurpose(event: { detail: { value: string | number } }) {
+  declaration.value.purpose = transferPurposes[Number(event.detail.value)]?.value ?? '';
+}
+
 function confirmOrder(locked: QuoteEstimate) {
   return perform(async () => {
+    const problem = declarationError(declaration.value);
+    if (problem) throw new Error(problem);
     if (!locked.expires_at || locked.expires_at * 1000 <= Date.now()) {
       throw new Error('锁汇已过期，请重新报价');
     }
@@ -661,7 +704,10 @@ function confirmOrder(locked: QuoteEstimate) {
     if (locked.expires_at * 1000 <= Date.now()) {
       throw new Error('锁汇已过期，请重新报价');
     }
-    confirmation.value = { quote: { ...locked }, account: { ...account } };
+    confirmation.value = {
+      quote: { ...locked }, account: { ...account },
+      declaration: { ...declaration.value, explanation: declaration.value.explanation.trim() },
+    };
   });
 }
 
@@ -676,7 +722,7 @@ function submitOrder() {
       throw new Error('报价已过期，请返回重新报价');
     }
     const order = await request.post<{ reference: string }>('app/remittance/orders', {
-      quote_reference: locked.record_no, payout_account: selected.account.reference,
+      quote_reference: locked.record_no, payout_account: selected.account.reference, declaration: selected.declaration,
     }, { handleUnauthorized: false });
     confirmation.value = undefined;
     returnOrder.value = order.reference;
@@ -684,6 +730,7 @@ function submitOrder() {
     ordersOpen.value = true;
     selectedCoupon.value = null;
     quote.value = undefined;
+    declaration.value = emptyDeclaration();
   });
 }
 
@@ -693,7 +740,7 @@ function copyQuoteReference(reference: string) {
 
 function saveDraft(reference: string) {
   return perform(async () => {
-    await request.put(`app/remittance/drafts/${reference}`, {}, { handleUnauthorized: false });
+    await request.put(`app/remittance/drafts/${reference}`, { declaration: declaration.value }, { handleUnauthorized: false });
     uni.showToast({ title: '已保存汇款草稿', icon: 'none' });
   });
 }
@@ -702,6 +749,7 @@ function resumeDraft(draft: RemitDraft) {
   amount.value = (draft.principal_minor / 100).toFixed(2);
   paymentMethod.value = draft.payment_method;
   payoutMethod.value = draft.payout_method;
+  declaration.value = { ...emptyDeclaration(), ...draft.declaration };
   selectedCoupon.value = null;
   draftsOpen.value = false;
   profileOpen.value = false;
@@ -719,6 +767,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.declaration-card { display: grid; gap: 18rpx; padding: 24rpx; margin-top: 24rpx; }
+.declaration-option { box-sizing: border-box; width: 100%; padding: 18rpx; background: #f2f2f2; border-radius: 10rpx; font-size: 28rpx; }
 .payment-notice {
   margin: 12rpx 0;
   overflow-wrap: anywhere;

@@ -25,9 +25,10 @@ final class MemberDraftService
         return Result::success(PaginationPayload::from($items, $rows->total(), $page, $rows->perPage())->toArray());
     }
 
-    public function save(int $member, string $reference): Result
+    public function save(int $member, string $reference, ?array $declaration = null): Result
     {
-        $draft = $this->database->transaction(fn () => $this->records->saveDraft($member, $reference), attempts: 3);
+        $declaration = $declaration === null ? null : RemittanceDeclaration::validate($declaration, complete: false);
+        $draft = $this->database->transaction(fn () => $this->records->saveDraft($member, $reference, $declaration), attempts: 3);
 
         return $draft === null
             ? Result::fail('找不到可保存的试算记录', 404)
@@ -51,6 +52,7 @@ final class MemberDraftService
             'payment_method' => $snapshot['payment_method'],
             'payout_method' => $snapshot['payout_method'],
             'draft_saved_at' => $record->draft_saved_at->toISOString(),
+            'declaration' => $record->declaration,
         ];
     }
 }

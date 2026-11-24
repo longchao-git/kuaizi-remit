@@ -15,10 +15,28 @@ final class YabandMaterialRequestRepository extends AbstractRepository
         return new YabandMaterialRequest;
     }
 
-    public function page(int $page, ?int $member): LengthAwarePaginator
+    public function page(int $page, ?int $member, array $filters = []): LengthAwarePaginator
     {
         return $this->query()->when($member !== null, fn ($query) => $query->where('member_id', $member))
+            ->when(isset($filters['member_id']), fn ($query) => $query->where('member_id', $filters['member_id']))
+            ->when(isset($filters['question_id']), fn ($query) => $query->where('question_id', $filters['question_id']))
+            ->when(isset($filters['status']), function ($query) use ($filters): void {
+                if ($filters['status'] === '6003') {
+                    $query->where(fn ($state) => $state->where('status', '6003')
+                        ->orWhere(fn ($expired) => $expired->where('status', '6001')->where('deadline_at', '<=', now())));
+                } else {
+                    $query->where('status', $filters['status']);
+                    if ($filters['status'] === '6001') {
+                        $query->where('deadline_at', '>', now());
+                    }
+                }
+            })
             ->orderByDesc('created_at')->orderByDesc('reference')->paginate(20, page: $page);
+    }
+
+    public function findForStaff(string $reference): ?YabandMaterialRequest
+    {
+        return $this->query()->find($reference);
     }
 
     public function find(string $reference, int $member): ?YabandMaterialRequest

@@ -32,13 +32,13 @@ final class MemberKycService
         return $this->withMemberLock((int) $member->getKey(), function () use ($member): Result {
             $link = $this->members->findFor((int) $member->getKey());
             if ($link?->uid === null) {
-                return Result::success(['registered' => false]);
+                return Result::success(['registered' => false, 'server_date' => now()->toDateString()]);
             }
 
             $status = $this->client->queryKyc((string) Str::uuid(), $link->uid);
             $this->syncState($link, $status);
 
-            return Result::success(['registered' => true, ...$status]);
+            return Result::success(['registered' => true, 'server_date' => now()->toDateString(), ...$status]);
         });
     }
 
@@ -132,7 +132,7 @@ final class MemberKycService
             $status = YabandKycStatus::fromQuery($result);
             $this->syncState($link, $status);
 
-            return Result::success(['registered' => true, ...$status]);
+            return Result::success(['registered' => true, 'server_date' => now()->toDateString(), ...$status]);
         });
     }
 

@@ -21,6 +21,9 @@
         <text class="confirmation-account">{{ accountLabel }}</text>
         <button class="inline-action accent" :disabled="busy || expired" @tap="$emit('account')">更换到账账户</button>
         <view class="line"><text>付款方式</text><text>{{ payments[quote.payment_method] }}</text></view>
+        <view class="line"><text>资金来源</text><text>{{ fundSources.find(item => item.value === declaration.source_of_funds)?.label }}</text></view>
+        <view class="line"><text>汇款用途</text><text>{{ transferPurposes.find(item => item.value === declaration.purpose)?.label }}</text></view>
+        <text v-if="declaration.explanation" class="description">{{ declaration.explanation }}</text>
       </view>
 
       <view class="card confirmation-card">
@@ -49,6 +52,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { formatAmount } from './previewOrder';
+import { fundSources, transferPurposes, type RemittanceDeclaration } from './remittanceDeclaration';
 
 const props = defineProps<{
   quote: {
@@ -65,6 +69,7 @@ const props = defineProps<{
     expires_at?: number;
   };
   accountLabel: string;
+  declaration: RemittanceDeclaration;
   busy: boolean;
   error: string;
   pageVisible: boolean;

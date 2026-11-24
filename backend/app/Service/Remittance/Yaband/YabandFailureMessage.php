@@ -29,6 +29,22 @@ final class YabandFailureMessage
         if ($path === '/api/kyc/query' && $error->upstreamCode === -1010) {
             return '认证账户未激活或无法找到，请联系客服核实';
         }
+        if ($path === '/api/kyc/profile' && $error->upstreamCode === -1020) {
+            return '请先完成身份验证并查询最新认证状态，再提交身份资料';
+        }
+        if ($path === '/api/kyc/profile') {
+            $message = match ($error->upstreamCode) {
+                -1010 => '认证账户未激活或无法找到，请联系客服核实',
+                -1011 => '当前认证状态不允许提交资料，请查询最新进度',
+                -1021 => '身份资料与验证信息不匹配，请核对姓名和证件信息',
+                -1022 => '居住地址不完整，请检查国家、街道、邮编及城市',
+                -1023 => '身份资料未获批准，请联系客服核实后再提交',
+                default => null,
+            };
+            if ($message !== null) {
+                return $message;
+            }
+        }
         if ($materials) {
             $message = match ($error->upstreamCode) {
                 -1030 => '补件任务未被识别，请刷新或联系客服核实',

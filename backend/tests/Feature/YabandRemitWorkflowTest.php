@@ -183,7 +183,8 @@ final class YabandRemitWorkflowTest extends TestCase
         $locked = $quotes->record($member->id, $base + ['mode' => 'locked', 'can_submit' => true, 'coupon_id' => $firstCoupon->id]);
         $anotherQuote = $quotes->record($member->id, $base + ['mode' => 'locked', 'can_submit' => true]);
         $path = '/api/app/remittance/orders';
-        $input = ['quote_reference' => $locked->reference, 'payout_account' => (string) Str::uuid()];
+        $input = ['quote_reference' => $locked->reference, 'payout_account' => (string) Str::uuid(),
+            'declaration' => ['source_of_funds' => '02', 'purpose' => '03', 'explanation' => '']];
         $this->asToken($other);
         $this->postJson($path, $input)->assertNotFound();
         $this->asToken($member);
