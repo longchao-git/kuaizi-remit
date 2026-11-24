@@ -37,6 +37,19 @@ final class UserRepository extends AbstractRepository
         return $this->query()->where('email', $email)->first();
     }
 
+    /** 登录与注销收尾共用会员行锁，防止注销后并发发出新会话。 */
+    public function lockMember(int $id): ?User
+    {
+        return $this->query()->where('is_platform_staff', false)->lockForUpdate()->find($id);
+    }
+
+    /** 只关闭会员登录并撤销会话，不删除历史身份、订单或财务记录。 */
+    public function closeMember(User $member): void
+    {
+        $member->forceFill(['member_closed_at' => $member->member_closed_at ?? now()])->saveOrFail();
+        $member->tokens()->delete();
+    }
+
     /** 员工账号不能作为会员业务的归属对象。 */
     public function memberExists(int $id): bool
     {

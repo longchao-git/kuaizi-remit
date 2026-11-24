@@ -5,6 +5,7 @@ namespace App\Service\Remittance\Yaband;
 use App\Common\Result;
 use App\Model\Remittance\YabandRemitMember;
 use App\Model\System\User;
+use App\Repository\Remittance\MemberClosureRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
@@ -17,11 +18,13 @@ use Illuminate\Support\Str;
 #[Singleton]
 final class MemberKycService
 {
+    /** 复用会员、通知和事务，并在身份变更前核对注销审核状态。 */
     public function __construct(
         private YabandRemitClient $client,
         private YabandRemitMemberRepository $members,
         private MemberNotificationService $notices,
         private DatabaseManager $database,
+        private MemberClosureRepository $closures,
     ) {}
 
     public function status(User $member): Result
@@ -59,6 +62,7 @@ final class MemberKycService
         });
     }
 
+    /** 已通过注销审核的账号不再开启或创建上游身份会话。 */
     public function start(User $member): Result
     {
         $prefix = config('yaband_remit.external_uid_prefix');
@@ -75,6 +79,9 @@ final class MemberKycService
 
         return $this->withMemberLock((int) $member->getKey(), function () use ($member, $prefix, $redirect, $notify, $contact): Result {
             $id = (int) $member->getKey();
+            if ($this->closures->approved($id)) {
+                return Result::fail('账号正在注销，暂不能发起身份验证', 409);
+            }
             $link = $this->members->getOrCreate($id);
             $uid = $link->uid;
             if ($uid === null) {
@@ -96,6 +103,7 @@ final class MemberKycService
         });
     }
 
+    /** 会员锁内重新核对注销状态及IDV资格，再提交资料。 */
     public function submitProfile(User $member, array $profile): Result
     {
         $notify = config('yaband_remit.kyc_notify_url');
@@ -104,6 +112,9 @@ final class MemberKycService
         }
 
         return $this->withMemberLock((int) $member->getKey(), function () use ($member, $profile, $notify): Result {
+            if ($this->closures->approved((int) $member->getKey())) {
+                return Result::fail('账号正在注销，暂不能提交认证资料', 409);
+            }
             $link = $this->members->findFor((int) $member->getKey());
             if ($link?->uid === null) {
                 return Result::fail('请先发起身份验证', 409);

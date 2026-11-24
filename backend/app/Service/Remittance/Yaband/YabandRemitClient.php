@@ -81,10 +81,17 @@ final class YabandRemitClient
         return $this->send('/api/materials/update', $data);
     }
 
-    /** 仅封装明确指定用户的注销请求，不代替本地业务执行门禁。 */
+    /** 注销后须核对商户、类型、UID及明确的Inactive结果，不把受理成功直接当停用。 */
     public function closeAccount(string $requestId, string $uid): array
     {
-        return $this->send('/api/kyc/close_account', $this->kycUser($requestId, $uid));
+        $data = $this->send('/api/kyc/close_account', $this->kycUser($requestId, $uid));
+        $this->assertResponseUser($data, $uid, '雅本注销响应的用户编号不匹配。', requireUid: true);
+        if (! array_key_exists('mid', $data) || ($data['type'] ?? null) !== 'kyc'
+            || ! is_string($data['status'] ?? null) || strtolower($data['status']) !== 'inactive') {
+            throw new YabandException('雅本未明确确认用户账号已停用。');
+        }
+
+        return $data;
     }
 
     /** 机构请求先完成协议校验及JSON序列化；白标继续使用独立适配器准备的参数。 */

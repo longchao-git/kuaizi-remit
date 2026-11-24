@@ -60,6 +60,10 @@ class AppServiceProvider extends ServiceProvider
             if (! $valid) {
                 return false;
             }
+            $account = $token->tokenable;
+            if ($account instanceof User && ! $account->is_platform_staff && $account->member_closed_at !== null) {
+                return false;
+            }
             if ($token->name === 'platform') {
                 $staff = $token->tokenable;
 

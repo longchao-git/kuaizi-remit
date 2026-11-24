@@ -56,6 +56,10 @@ Route::middleware('auth:sanctum')->prefix('admin/remittance')->group(function ()
         Route::get('/closures', [StaffClosureController::class, 'index']);
         Route::put('/closures/{closure}', [StaffClosureController::class, 'review'])->where('closure', '[1-9][0-9]{0,17}')
             ->middleware('throttle:30,1,remit-closure-review:');
+        Route::post('/closures/{closure}/execute', [StaffClosureController::class, 'execute'])->where('closure', '[1-9][0-9]{0,17}')
+            ->middleware('throttle:6,1,remit-closure-execute:');
+        Route::post('/closures/{closure}/verify', [StaffClosureController::class, 'verify'])->where('closure', '[1-9][0-9]{0,17}')
+            ->middleware('throttle:12,1,remit-closure-verify:');
     });
     Route::prefix('push')->middleware(RequirePlatformPermission::class.':'.RemittancePermission::MANAGE_PUSH_PLANS)->group(function () {
         Route::get('/plans', [PushReminderController::class, 'index']);

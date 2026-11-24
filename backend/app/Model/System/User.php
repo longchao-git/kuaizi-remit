@@ -23,6 +23,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $remember_token
  * @property bool $is_platform_staff
  * @property string|null $platform_role
+ * @property Carbon|null $member_closed_at 会员注销完成后禁止登录，历史业务数据保留
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -47,6 +48,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_platform_staff' => 'boolean',
+            'member_closed_at' => 'datetime',
         ];
     }
 }

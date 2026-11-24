@@ -47,8 +47,7 @@ final class MemberSessionController extends AbstractController
         ]);
         $result = $sessions->loginSms($input['mobile'], $input['code']);
 
-        return $result->isSuccess() ? $this->success($result->getData(), $result->getMsg())
-            : $this->fail($result->getCode(), $result->getMsg());
+        return $this->loginResult($result);
     }
 
     public function loginLocal(Request $request, MemberSessionService $sessions): JsonResponse
@@ -61,9 +60,7 @@ final class MemberSessionController extends AbstractController
         ]);
         $result = $sessions->loginLocal($input['email'], $input['password']);
 
-        return $result->isSuccess()
-            ? $this->success($result->getData(), $result->getMsg())
-            : $this->fail($result->getCode(), $result->getMsg());
+        return $this->loginResult($result);
     }
 
     public function current(Request $request, MemberSessionService $sessions): JsonResponse
@@ -76,6 +73,12 @@ final class MemberSessionController extends AbstractController
         $users->revokeSession($request->user()->currentAccessToken());
 
         return $this->success(true);
+    }
+
+    /** 注销账号的登录拒绝保留HTTP403，原验证码/凭据业务错误继续使用既有响应约定。 */
+    private function loginResult(Result $result): JsonResponse
+    {
+        return ResponseResult::json($result, $result->getCode() === 403 ? 403 : 200);
     }
 
     /** 保持未开放端点的 HTTP 状态，并让 App 显示可理解的原因。 */

@@ -64,7 +64,7 @@ final class YabandInstitutionPaymentRequest
             }
         }
         if (array_key_exists('demo', $data)) {
-            $this->text($data, 'demo', 200);
+            $this->text($data, 'demo', 200, allowEmpty: true);
         }
 
         [$device, $data['device']] = $this->jsonObject($data, 'device', 200);
@@ -100,10 +100,10 @@ final class YabandInstitutionPaymentRequest
             $this->invalid('payee.exchange_rate');
         }
         if ($payee['purpose_and_explanation_of_the_transfer'] === '05' || array_key_exists('explanation', $payee)) {
-            $this->text($payee, 'explanation', 200, 'payee.');
+            $this->text($payee, 'explanation', 200, 'payee.', allowEmpty: $payee['purpose_and_explanation_of_the_transfer'] !== '05');
         }
         if (array_key_exists('remittance_reference', $payee)) {
-            $this->text($payee, 'remittance_reference', 200, 'payee.');
+            $this->text($payee, 'remittance_reference', 200, 'payee.', allowEmpty: true);
         }
     }
 
@@ -153,10 +153,10 @@ final class YabandInstitutionPaymentRequest
     }
 
     /** 严格限制文本类型及字符数，不修剪签名字段或将其他类型转换为字符串。 */
-    private function text(array $data, string $key, int $length, string $prefix = ''): void
+    private function text(array $data, string $key, int $length, string $prefix = '', bool $allowEmpty = false): void
     {
         $value = $data[$key] ?? null;
-        if (! is_string($value) || ! mb_check_encoding($value, 'UTF-8') || trim($value) === '' || mb_strlen($value, 'UTF-8') > $length) {
+        if (! is_string($value) || ! mb_check_encoding($value, 'UTF-8') || (! $allowEmpty && trim($value) === '') || mb_strlen($value, 'UTF-8') > $length) {
             $this->invalid($prefix.$key);
         }
     }

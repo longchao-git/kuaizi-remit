@@ -98,11 +98,18 @@ final class MemberSessionService
         }, attempts: 3);
     }
 
+    /** 在会员行锁内重查停用状态并发令牌，与注销收尾串行化。 */
     private function start(User $member, string $name): Result
     {
-        $token = $this->users->startMemberSession($member, $name);
+        return $this->database->transaction(function () use ($member, $name): Result {
+            $current = $this->users->lockMember((int) $member->id);
+            if ($current === null || $current->member_closed_at !== null) {
+                return Result::fail('账号已注销，无法登录', 403);
+            }
+            $token = $this->users->startMemberSession($current, $name);
 
-        return Result::success(['token' => $token->plainTextToken, 'member' => $this->profile($member)]);
+            return Result::success(['token' => $token->plainTextToken, 'member' => $this->profile($current)]);
+        });
     }
 
     /** 返回 App 需要的会员标识和显示名，不暴露账号敏感字段。 */

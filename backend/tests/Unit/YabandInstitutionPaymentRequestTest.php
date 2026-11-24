@@ -81,6 +81,7 @@ final class YabandInstitutionPaymentRequestTest extends TestCase
         yield 'payee-source' => [['payee' => ['source_of_funds' => '05']]];
         yield 'payee-purpose' => [['payee' => ['purpose_and_explanation_of_the_transfer' => '06']]];
         yield 'other-purpose-needs-explanation' => [['payee' => ['purpose_and_explanation_of_the_transfer' => '05']]];
+        yield 'other-purpose-empty-explanation' => [['payee' => ['purpose_and_explanation_of_the_transfer' => '05', 'explanation' => '']]];
         yield 'device-json-limit' => [['device' => ['SN' => str_repeat('a', 200)]]];
         yield 'payee-json-limit' => [['payee' => ['remittance_reference' => str_repeat('a', 200), 'explanation' => str_repeat('a', 200)]]];
         yield 'card-missing-info' => [['sub_pay_method' => 'Card', 'gettoken' => false]];
@@ -155,5 +156,18 @@ final class YabandInstitutionPaymentRequestTest extends TestCase
         $this->assertSame('0.00', $result['discount_amount']);
         $this->assertSame('0.00', $result['customer_fee']);
         $this->assertSame('2001:db8::1', $result['ip']);
+    }
+
+    public function test_optional_empty_payment_notes_do_not_become_required_fields(): void
+    {
+        $input = InstitutionPaymentFixture::fields();
+        $input['demo'] = '';
+        $input['payee']['explanation'] = '';
+        $input['payee']['remittance_reference'] = '';
+        $result = (new YabandInstitutionPaymentRequest)->prepareFields($input);
+        $payee = json_decode($result['payee'], true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('', $result['demo']);
+        $this->assertSame('', $payee['explanation']);
+        $this->assertSame('', $payee['remittance_reference']);
     }
 }
