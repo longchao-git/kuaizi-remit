@@ -24,6 +24,10 @@ php artisan serve --host=127.0.0.1 --port=8688
 
 在 `backend/` 执行 `composer test` 和 `php vendor/bin/pint --test` 可运行测试和格式检查。测试固定使用内存 SQLite（`phpunit.xml` 覆盖 `$_ENV` 与 `$_SERVER`），不会连接本地 MySQL。
 
+### 独立测试服务器
+
+本项目的独立测试 API 为 `https://api.kzremit.com/`，管理后台为 `https://admin.kzremit.com/`。服务器运行配置、资源限制、持久化、证书和部署入口见 [独立测试环境部署](../deploy/kuaizi-remit/README.md)。下面的本地 Docker 编排不是该服务器的部署入口，不可混用数据库或凭据。
+
 ### Docker 本地运行
 
 API 容器 `kuaizi-remit-api` 直接定义在 mt_sas 编排的 `docker-compose.yml` 中，与 `sas-mysql` 同属 `mt_sas_default` 网络，数据库主机名用 `mysql`。本地库为 `kuaizi_remit`，账号沿用 `root` / `root_pass`。镜像由本目录的 `Dockerfile` 构建，首次启动会自动生成 `.env`、APP_KEY、安装 Composer 依赖并执行迁移。

@@ -1,0 +1,12 @@
+[Unit]
+Description=Renew only the Kuaizi Remit test certificates
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/kuaizi-remit/scripts/renew-certificate.sh
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kuaizi-remit-cert-renew
