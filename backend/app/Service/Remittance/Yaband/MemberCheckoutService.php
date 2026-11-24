@@ -33,6 +33,7 @@ final class MemberCheckoutService
         private MemberClosureRepository $closures,
         private DatabaseManager $database,
         private MemberKycService $kyc,
+        private YabandInstitutionPaymentRequest $institutionPayment,
     ) {}
 
     /** 查询结算适配器提供的本人账户，用于下单确认时选择。 */
@@ -101,9 +102,16 @@ final class MemberCheckoutService
             if ($this->quoteExpired($snapshot)) {
                 return Result::fail('锁汇已过期，请重新报价', 409);
             }
+            if (! is_bool($prepared['white_label'] ?? null) || ! is_array($prepared['fields'] ?? null)) {
+                throw new YabandException('雅本结算适配器未返回有效的支付参数。');
+            }
             $fields = [...$prepared['fields'], 'uid' => $link->uid, 'currency' => 'EUR'];
             unset($fields['order_id'], $fields['request_id'], $fields['type'], $fields['pay_method']);
             $fields['amount'] = $this->decimal($snapshot['principal_minor']);
+            // 协议错误必须在订单及优惠券预留之前拒绝，不能让错误参数占用结算资源。
+            if (! $prepared['white_label']) {
+                $fields = $this->institutionPayment->prepareFields($fields);
+            }
             $hash = hash_hmac('sha256', json_encode([$account, $prepared['white_label'], $fields], JSON_THROW_ON_ERROR), (string) config('app.key'));
             $order ??= $this->reserve((int) $member->id, $quoteReference, $snapshot, $prepared['white_label'], $hash);
             if ($order instanceof Result) {

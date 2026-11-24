@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\InstitutionPaymentFixture;
 use Tests\TestCase;
 
 final class YabandTokenRecoveryTest extends TestCase
@@ -46,7 +47,7 @@ final class YabandTokenRecoveryTest extends TestCase
         $this->assertSame('rejected-token', app(YabandTransport::class)->token());
 
         try {
-            app(YabandRemitClient::class)->submitPayment(['request_id' => 'fixture-request'], false);
+            app(YabandRemitClient::class)->submitPayment(InstitutionPaymentFixture::request(), false);
             $this->fail('Expected the authentication failure to be returned.');
         } catch (YabandException) {
             // 本次支付必须失败，不能通过自动重放掩盖未知处理结果。

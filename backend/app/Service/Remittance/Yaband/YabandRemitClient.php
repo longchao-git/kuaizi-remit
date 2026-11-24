@@ -9,7 +9,10 @@ use Illuminate\Container\Attributes\Singleton;
 final class YabandRemitClient
 {
     /** 复用鉴权、HTTP传输与响应解析，不在业务方法里自动重放请求。 */
-    public function __construct(private YabandTransport $transport) {}
+    public function __construct(
+        private YabandTransport $transport,
+        private YabandInstitutionPaymentRequest $institutionPayment,
+    ) {}
 
     /** 创建用户后核对外部会员编号及返回UID，再交给会员服务绑定。 */
     public function createMember(string $requestId, string $notifyUrl, array $user): string
@@ -84,9 +87,13 @@ final class YabandRemitClient
         return $this->send('/api/kyc/close_account', $this->kycUser($requestId, $uid));
     }
 
-    /** 复用已准备好的支付参数，仅固定供应商要求的业务类型与在线支付方式。 */
+    /** 机构请求先完成协议校验及JSON序列化；白标继续使用独立适配器准备的参数。 */
     public function submitPayment(array $data, bool $whiteLabel): array
     {
+        if (! $whiteLabel) {
+            $data = $this->institutionPayment->build($data);
+        }
+
         return $this->send($this->transactionPath('payment', $whiteLabel), [...$data, 'type' => 'transaction', 'pay_method' => 'online']);
     }
 

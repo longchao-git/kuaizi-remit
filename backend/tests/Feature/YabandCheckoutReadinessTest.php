@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\InstitutionPaymentFixture;
 use Tests\TestCase;
 
 final class YabandCheckoutReadinessTest extends TestCase
@@ -84,6 +85,10 @@ final class YabandCheckoutReadinessTest extends TestCase
 
             public ?Closure $onPrepare = null;
 
+            public array $fieldChanges = [];
+
+            public ?array $preparedOverride = null;
+
             public function accounts(User $member, string $payoutMethod): array
             {
                 return [];
@@ -96,7 +101,10 @@ final class YabandCheckoutReadinessTest extends TestCase
                     ($this->onPrepare)();
                 }
 
-                return ['white_label' => $this->whiteLabel, 'fields' => ['payee' => '{"account":"fixture-account"}']];
+                return $this->preparedOverride ?? [
+                    'white_label' => $this->whiteLabel,
+                    'fields' => array_replace_recursive(InstitutionPaymentFixture::fields(), $this->fieldChanges),
+                ];
             }
         };
         $this->app->instance(YabandCheckoutTerms::class, $this->terms);
@@ -130,6 +138,57 @@ final class YabandCheckoutReadinessTest extends TestCase
 
             return Http::response(['status' => true, 'code' => 200, 'data' => $data]);
         });
+    }
+
+    #[DataProvider('invalidInstitutionTerms')]
+    public function test_invalid_institution_parameters_do_not_reserve_order_or_coupon(array $changes): void
+    {
+        $this->terms->fieldChanges = $changes;
+        $this->postJson('/api/app/remittance/orders', $this->input)->assertStatus(503);
+        $this->assertSame(1, $this->terms->prepares);
+        $this->assertNothingReservedOrPaid();
+        $this->terms->fieldChanges = [];
+        $this->postJson('/api/app/remittance/orders', $this->input)->assertOk();
+        $this->assertCount(1, $this->payments());
+    }
+
+    public static function invalidInstitutionTerms(): array
+    {
+        return [
+            [['payee' => ['account' => '']]], [['payee' => ['channel' => 'bank']]],
+            [['payee' => ['amount' => '805.401']]], [['payee' => ['exchange_rate' => null]]],
+            [['payee' => ['purpose_and_explanation_of_the_transfer' => '05']]],
+            [['customer_fee' => null]], [['device' => null]], [['timeout' => '1441']],
+            [['sub_pay_method' => 'IDEAL']], [['sub_pay_method' => 'SEPA']],
+        ];
+    }
+
+    #[DataProvider('invalidPreparedShapes')]
+    public function test_malformed_adapter_result_returns_service_error_without_reserving(array $prepared): void
+    {
+        $this->terms->preparedOverride = $prepared;
+        $this->postJson('/api/app/remittance/orders', $this->input)->assertStatus(503);
+        $this->assertNothingReservedOrPaid();
+    }
+
+    public static function invalidPreparedShapes(): array
+    {
+        return [[[]], [['white_label' => false]], [['white_label' => 'false', 'fields' => []]], [['white_label' => false, 'fields' => 'invalid']]];
+    }
+
+    public function test_member_and_locked_principal_override_adapter_identifiers_and_amount(): void
+    {
+        $this->terms->fieldChanges = [
+            'uid' => 'another-member', 'amount' => '0.01', 'currency' => 'CNY',
+            'order_id' => 'adapter-order', 'request_id' => 'adapter-request', 'type' => 'wrong', 'pay_method' => 'wrong',
+        ];
+        $reference = $this->postJson('/api/app/remittance/orders', $this->input)->assertOk()->json('data.reference');
+        $request = $this->payments()[0][0]['data'];
+        $this->assertSame('101', $request['uid']);
+        $this->assertSame('100.00', $request['amount']);
+        $this->assertSame('EUR', $request['currency']);
+        $this->assertSame($reference, $request['order_id']);
+        $this->assertTrue(Str::isUuid($request['request_id']));
     }
 
     #[DataProvider('ineligibleKyc')]
