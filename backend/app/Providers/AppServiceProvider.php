@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Model\System\User;
 use App\Permission\PlatformRoles;
+use App\Service\Remittance\Yaband\Contract\YabandRemitCallbackVerifier;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
+use App\Service\Remittance\Yaband\YabandRemitHmacCallbackVerifier;
 use App\Service\Remittance\Yaband\YabandRemitHmacSigner;
 use App\Service\Sms\LogSmsChannel;
 use App\Service\Sms\NullSmsChannel;
@@ -31,6 +33,13 @@ class AppServiceProvider extends ServiceProvider
                 YabandRemitSigner::class,
                 static fn (): YabandRemitSigner => new YabandRemitHmacSigner($secretKey),
             );
+            $mid = config('yaband_remit.mid');
+            if (config('yaband_remit.callback_verification_enabled') === true && is_string($mid) && trim($mid) !== '') {
+                $this->app->singleton(
+                    YabandRemitCallbackVerifier::class,
+                    static fn (): YabandRemitCallbackVerifier => new YabandRemitHmacCallbackVerifier($secretKey, $mid),
+                );
+            }
         }
         $this->app->singleton(SmsChannel::class, static function (): SmsChannel {
             return match ((string) config('remit.sms.channel')) {

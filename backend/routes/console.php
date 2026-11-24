@@ -37,7 +37,7 @@ Artisan::command('remit:check-yaband', function (YabandTransport $transport): in
     $secretKey = config('yaband_remit.secret_key');
     $this->line('签名密钥：'.(is_string($secretKey) && trim($secretKey) !== '' ? '已配置' : '待配置'));
     $this->line('请求签名：'.(app()->bound(YabandRemitSigner::class) ? '已注册' : '待实现'));
-    $this->line('回调验签：'.(app()->bound(YabandRemitCallbackVerifier::class) ? '已注册' : '待实现'));
+    $this->line('回调验签：'.(app()->bound(YabandRemitCallbackVerifier::class) ? '已注册' : '未启用或配置不完整'));
 
     return Command::SUCCESS;
 })->purpose('检查雅本汇款 Token 鉴权与签名组件的配置状态');

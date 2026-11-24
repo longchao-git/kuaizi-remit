@@ -53,7 +53,7 @@ final class YabandRemitClientTest extends TestCase
             ->expectsOutput('雅本 Token 鉴权通过。')
             ->expectsOutput('签名密钥：已配置')
             ->expectsOutput('请求签名：已注册')
-            ->expectsOutput('回调验签：待实现')
+            ->expectsOutput('回调验签：未启用或配置不完整')
             ->doesntExpectOutputToContain('fixture-token')
             ->doesntExpectOutputToContain('fixture-signing-secret')
             ->doesntExpectOutputToContain('fixture-api-password')
