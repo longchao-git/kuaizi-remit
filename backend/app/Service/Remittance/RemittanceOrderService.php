@@ -21,6 +21,7 @@ use Illuminate\Support\Str;
 #[Singleton]
 final class RemittanceOrderService
 {
+    /** 复用本地订单、供应商查询及通知，资金状态仅在核对后保存。 */
     public function __construct(
         private RemittanceOrderRepository $orders,
         private YabandRemitClient $yaband,
@@ -43,6 +44,7 @@ final class RemittanceOrderService
         return Result::success($payload);
     }
 
+    /** 会员只能读取自己的订单和当前可用付款信息。 */
     public function details(string $reference, int $member): Result
     {
         $order = $this->orders->find($reference, $member);
@@ -121,14 +123,15 @@ final class RemittanceOrderService
                     return Result::fail('雅本返回的用户与订单不匹配', 502);
                 }
             }
+            if (! $this->matchesPaymentTerms($transaction, $order)) {
+                return Result::fail('雅本返回的金额或币种与订单不匹配', 502);
+            }
 
             $income = $transaction['income_status_code'] ?? null;
             $outgoing = $transaction['outgoing_status_code'] ?? null;
             $refund = $transaction['refund_status_code'] ?? null;
-            foreach ([$income, $outgoing, $refund] as $code) {
-                if (! is_string($code) || ! preg_match('/^[0-9]{2}$/D', $code)) {
-                    return Result::fail('雅本返回的订单状态不完整', 502);
-                }
+            if (! $this->supportedState($income, $outgoing, $refund)) {
+                return Result::fail('无法识别雅本返回的订单状态，请查询核实', 502);
             }
             $this->saveState($order, $income, $outgoing, $refund);
 
@@ -140,6 +143,27 @@ final class RemittanceOrderService
         }
     }
 
+    /** 核对实际上游返回的订单金额及币种，兼容未携带这些字段的历史响应。 */
+    private function matchesPaymentTerms(array $transaction, RemittanceOrder $order): bool
+    {
+        $amount = sprintf('%d.%02d', intdiv($order->principal_minor, 100), $order->principal_minor % 100);
+        if (array_key_exists('amount', $transaction)
+            && (! is_string($transaction['amount']) || $transaction['amount'] !== $amount)) {
+            return false;
+        }
+
+        return ! array_key_exists('currency', $transaction) || $transaction['currency'] === 'EUR';
+    }
+
+    /** 三类状态按各自已文档化的枚举核对，未知值不能触发核销或成功通知。 */
+    private function supportedState(mixed $income, mixed $outgoing, mixed $refund): bool
+    {
+        return in_array($income, ['00', '01', '02', '03', '04', '05', '06', '07', '08'], true)
+            && in_array($outgoing, ['01', '02', '03', '04', '05', '06', '07'], true)
+            && in_array($refund, ['00', '01', '02', '03', '04', '05', '06', '07'], true);
+    }
+
+    /** 同一事务同步订单及券，仅对核实后的关键状态变化发送一次消息。 */
     private function saveState(RemittanceOrder $order, string $income, string $outgoing, string $refund): void
     {
         $title = match (true) {
@@ -165,6 +189,7 @@ final class RemittanceOrderService
         }
     }
 
+    /** 按会员及员工视图返回业务字段，付款链接仅供本人在有效期内使用。 */
     private function format(RemittanceOrder $order, bool $staff = false, bool $paymentDetails = false): array
     {
         $result = [
@@ -198,12 +223,18 @@ final class RemittanceOrderService
         ] : $result;
     }
 
+    /** 状态含义分别呈现，退款取消和未识别状态不显示为资金完成。 */
     public function statusLabel(RemittanceOrder $order): string
     {
+        if (! $this->supportedState($order->income_code, $order->outgoing_code, $order->refund_code)) {
+            return '等待核对状态';
+        }
+
         return match (true) {
             $order->refund_code === '04' => '已退款',
             in_array($order->refund_code, ['01', '02', '03'], true) => '退款处理中',
             in_array($order->refund_code, ['05', '06'], true) => '退款异常',
+            $order->refund_code === '07' => '退款已取消',
             $order->outgoing_code === '05' && $order->income_code === '00' => '已下发',
             in_array($order->outgoing_code, ['03', '06', '07'], true) && $order->income_code === '00' => '下发异常',
             $order->income_code === '00' => '已付款，汇款处理中',
