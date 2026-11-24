@@ -7,6 +7,7 @@ use App\Common\Result;
 use App\Model\Notification\MemberNotification;
 use App\Repository\Notification\MemberNotificationRepository;
 use App\Repository\Remittance\RemittanceOrderRepository;
+use App\Repository\Remittance\YabandMaterialRequestRepository;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -19,6 +20,7 @@ final class MemberNotificationService
         private MemberNotificationRepository $notices,
         private MemberPushService $push,
         private RemittanceOrderRepository $orders,
+        private YabandMaterialRequestRepository $materials,
     ) {}
 
     /** 返回指定会员的消息及全量未读数，最新消息在前。 */
@@ -59,8 +61,12 @@ final class MemberNotificationService
     public function send(int $member, ?int $staff, array $input, bool $broadcast = true): Result
     {
         $order = $input['order_reference'] ?? null;
+        $material = $input['material_reference'] ?? null;
         if ($order !== null && $this->orders->find($order, $member) === null) {
             return Result::fail('订单不存在', 404);
+        }
+        if ($material !== null && $this->materials->find($material, $member) === null) {
+            return Result::fail('补件任务不存在', 404);
         }
         $notice = $this->notices->createOnce(strtolower($input['request_id']), [
             'member_id' => $member,
@@ -69,11 +75,13 @@ final class MemberNotificationService
             'body' => $input['body'],
             'support_ticket_id' => $input['support_ticket_id'] ?? null,
             'order_reference' => $order,
+            'material_reference' => $material,
         ]);
 
         if ($notice->member_id !== $member || $notice->sender_id !== $staff
             || $notice->support_ticket_id !== ($input['support_ticket_id'] ?? null)
             || $notice->order_reference !== $order
+            || $notice->material_reference !== $material
             || $notice->title !== $input['title'] || $notice->body !== $input['body']) {
             return Result::fail('发送请求已用于其他消息', 409);
         }
@@ -108,6 +116,7 @@ final class MemberNotificationService
             'body' => $notice->body,
             'support_ticket_id' => $notice->support_ticket_id === null ? null : (string) $notice->support_ticket_id,
             'order_reference' => $notice->order_reference,
+            'material_reference' => $notice->material_reference,
             'read_at' => $notice->read_at?->toISOString(),
             'created_at' => $notice->created_at->toISOString(),
         ];

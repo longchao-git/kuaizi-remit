@@ -85,8 +85,9 @@ final class MemberKycService
             $link = $this->members->getOrCreate($id);
             $uid = $link->uid;
             if ($uid === null) {
+                $this->members->rememberExternalUid($link, $prefix.'-'.$id);
                 $uid = $this->client->createMember($link->create_request_id, $notify, [
-                    'external_uid' => $prefix.'-'.$id,
+                    'external_uid' => $link->external_uid,
                     ...$contact,
                 ]);
                 $this->members->saveState($link, $uid, null);
@@ -173,8 +174,8 @@ final class MemberKycService
             return Cache::lock('yaband-remit:kyc:'.$member, 75)->block(3, $action);
         } catch (LockTimeoutException) {
             return Result::fail('身份验证请求正在处理，请稍后再试', 409);
-        } catch (YabandException) {
-            return Result::fail('暂时无法获取雅本认证结果，请稍后再试', 502);
+        } catch (YabandException $error) {
+            return Result::fail(YabandFailureMessage::forException($error, '暂时无法获取雅本认证结果，请稍后再试'), 502);
         }
     }
 

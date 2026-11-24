@@ -11,8 +11,8 @@
       <button v-if="profileOpen && !subPageOpen" class="top-action" @tap="settingsOpen = true">设置</button>
     </view>
 
-    <RemitInbox v-if="inboxOpen" v-show="!ordersOpen && !ticketsOpen" ref="inbox" :target-notice="targetNotice" @expired="expire"
-      @unread="inboxCount = $event" @ticket="openTicket" @order="openNoticeOrder" />
+    <RemitInbox v-if="inboxOpen" v-show="!ordersOpen && !ticketsOpen && !materialsOpen" ref="inbox" :target-notice="targetNotice" @expired="expire"
+      @unread="inboxCount = $event" @ticket="openTicket" @order="openNoticeOrder" @material="openNoticeMaterial" />
     <RemitHelp v-if="helpOpen" v-show="!chatOpen" @contact="chatOpen = true" />
 
     <view v-if="!member && props.allowLocalLogin" class="body auth">
@@ -41,7 +41,7 @@
     />
     <RemitTickets v-else-if="ticketsOpen" ref="tickets" :initial-ticket="noticeTicket" :order-reference="ticketOrder" @expired="expire" />
     <RemitKyc v-else-if="kycOpen" :page-visible="props.pageVisible" @expired="expire" />
-    <RemitMaterials v-else-if="materialsOpen" @expired="expire" />
+    <RemitMaterials v-else-if="materialsOpen" :target-reference="materialTarget" @expired="expire" />
     <RemitClosure v-else-if="closureOpen" @expired="expire" />
     <RemitSupportConversation
       v-else-if="chatOpen" :live="live" :messages="messages" :sending="sending" :status="status"
@@ -239,6 +239,7 @@ const ordersOpen = ref(false);
 const profileOpen = ref(false);
 const settingsOpen = ref(false);
 const materialsOpen = ref(false);
+const materialTarget = ref<string>();
 const closureOpen = ref(false);
 const orderDetail = ref(false);
 const returnOrder = ref<string>();
@@ -290,9 +291,9 @@ const pageTitle = computed(() => {
   if (draftsOpen.value) return '汇款草稿';
   if (ticketsOpen.value) return '客服工单';
   if (ordersOpen.value) return orderDetail.value ? '订单详情' : '汇款订单';
+  if (materialsOpen.value) return '补充资料';
   if (inboxOpen.value) return '消息通知';
   if (kycOpen.value) return '身份认证';
-  if (materialsOpen.value) return '补充资料';
   if (closureOpen.value) return '账号注销';
   if (settingsOpen.value) return '设置';
   if (profileOpen.value) return '我的';
@@ -369,13 +370,14 @@ function back() {
       returnOrder.value = undefined;
       if (!orderView.value?.back()) ordersOpen.value = false;
     }
+  } else if (materialsOpen.value) {
+    materialsOpen.value = false;
+    materialTarget.value = undefined;
   } else if (inboxOpen.value) {
     inboxOpen.value = false;
     targetNotice.value = undefined;
   } else if (kycOpen.value) {
     kycOpen.value = false;
-  } else if (materialsOpen.value) {
-    materialsOpen.value = false;
   } else if (closureOpen.value) {
     closureOpen.value = false;
   } else if (settingsOpen.value) {
@@ -526,6 +528,11 @@ function openNoticeOrder(reference: string) {
   ordersOpen.value = true;
 }
 
+function openNoticeMaterial(reference: string) {
+  materialTarget.value = reference;
+  materialsOpen.value = true;
+}
+
 watch([amount, paymentMethod, payoutMethod, selectedCoupon], () => {
   quoteRevision++;
   quote.value = undefined;
@@ -567,6 +574,7 @@ function clearSession() {
   profileOpen.value = false;
   settingsOpen.value = false;
   materialsOpen.value = false;
+  materialTarget.value = undefined;
   closureOpen.value = false;
   orderDetail.value = false;
   returnOrder.value = undefined;

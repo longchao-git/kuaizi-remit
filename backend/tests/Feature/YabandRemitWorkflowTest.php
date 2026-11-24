@@ -16,6 +16,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Tests\Support\InstitutionPaymentFixture;
 use Tests\TestCase;
 
 final class YabandRemitWorkflowTest extends TestCase
@@ -202,10 +203,12 @@ final class YabandRemitWorkflowTest extends TestCase
 
             public function prepare(User $member, array $snapshot, string $payoutAccount, string $ip): array
             {
-                return ['white_label' => true, 'replay_safe' => $this->replaySafe, 'fields' => [
-                    'payee' => json_encode(['account' => $payoutAccount, 'amount' => '805.40'], JSON_THROW_ON_ERROR),
-                    'sub_pay_method' => 'iDEAL', 'amount' => '1.00',
-                ]];
+                $fields = InstitutionPaymentFixture::fields();
+                $fields['payee']['account'] = $payoutAccount;
+                $fields['payee'] = json_encode($fields['payee'], JSON_THROW_ON_ERROR);
+                $fields['amount'] = '1.00';
+
+                return ['white_label' => true, 'replay_safe' => $this->replaySafe, 'fields' => $fields];
             }
         };
         $this->app->instance(YabandCheckoutTerms::class, $terms);

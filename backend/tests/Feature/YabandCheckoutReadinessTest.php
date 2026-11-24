@@ -163,6 +163,19 @@ final class YabandCheckoutReadinessTest extends TestCase
         ];
     }
 
+    public function test_white_label_validation_precedes_reservation_and_valid_requests_use_only_white_path(): void
+    {
+        $this->terms->whiteLabel = true;
+        $this->terms->fieldChanges = ['source_amount' => '100.00'];
+        $this->postJson('/app/remittance/orders', $this->input)->assertStatus(503);
+        $this->assertNothingReservedOrPaid();
+        $this->terms->fieldChanges = [];
+        $reference = $this->postJson('/app/remittance/orders', $this->input)->assertOk()->json('data.reference');
+        $this->assertTrue(RemittanceOrder::query()->where('reference', $reference)->sole()->white_label);
+        $this->assertSame('https://checkout.example.test/api/whitelable/transaction/payment', $this->payments()[0][0]->url());
+        $this->assertIsString($this->payments()[0][0]['data']['payee']);
+    }
+
     #[DataProvider('invalidPreparedShapes')]
     public function test_malformed_adapter_result_returns_service_error_without_reserving(array $prepared): void
     {

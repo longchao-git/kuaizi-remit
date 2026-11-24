@@ -12,6 +12,7 @@ final class YabandRemitClient
     public function __construct(
         private YabandTransport $transport,
         private YabandInstitutionPaymentRequest $institutionPayment,
+        private YabandWhiteLabelPaymentRequest $whiteLabelPayment,
     ) {}
 
     /** 创建用户后核对外部会员编号及返回UID，再交给会员服务绑定。 */
@@ -94,11 +95,13 @@ final class YabandRemitClient
         return $data;
     }
 
-    /** 机构请求先完成协议校验及JSON序列化；白标继续使用独立适配器准备的参数。 */
+    /** 按订单的实际模式校验字段表及JSON序列化，不把旧机构示例当白标请求。 */
     public function submitPayment(array $data, bool $whiteLabel): array
     {
         if (! $whiteLabel) {
             $data = $this->institutionPayment->build($data);
+        } else {
+            $data = $this->whiteLabelPayment->build($data);
         }
 
         return $this->send($this->transactionPath('payment', $whiteLabel), [...$data, 'type' => 'transaction', 'pay_method' => 'online']);

@@ -33,6 +33,14 @@ final class MemberMaterialService
         return Result::success(PaginationPayload::from($items, $rows->total(), $page, $rows->perPage())->toArray());
     }
 
+    /** 只返回当前会员的任务，不向会员暴露上游qno或其他会员资料。 */
+    public function show(int $member, string $reference): Result
+    {
+        $task = $this->tasks->find($reference, $member);
+
+        return $task === null ? Result::fail('补件任务不存在', 404) : Result::success($this->present($task));
+    }
+
     /** 运营按已确认的雅本问题编号登记任务，会员端不能指定 qno。 */
     public function register(array $input): Result
     {
@@ -119,7 +127,9 @@ final class MemberMaterialService
             $this->tasks->saveStatus($task, $status, submissionConfirmed: $status === '6002');
 
             return $status === '6002' ? Result::success($this->present($task)) : Result::fail('雅本补件任务已过期', 409);
-        } catch (YabandException|LockTimeoutException) {
+        } catch (YabandException $error) {
+            return Result::fail(YabandFailureMessage::forException($error, '雅本补件结果未确认，请使用原资料重试'), 503);
+        } catch (LockTimeoutException) {
             return Result::fail('雅本补件结果未确认，请使用原资料重试', 503);
         } finally {
             $lock->release();

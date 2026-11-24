@@ -5,6 +5,7 @@ namespace App\Controller\Common;
 use App\Service\Remittance\RemittanceOrderService;
 use App\Service\Remittance\Yaband\Contract\YabandRemitCallbackVerifier;
 use App\Service\Remittance\Yaband\MemberKycService;
+use App\Service\Remittance\Yaband\MemberMaterialNoticeService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -12,7 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class YabandRemitCallbackController
 {
     /** 验签与归属核对通过后触发主动查询，失败保留非成功应答供上游重试。 */
-    public function __invoke(Request $request, string $event, RemittanceOrderService $orders, MemberKycService $kyc): Response
+    public function __invoke(Request $request, string $event, RemittanceOrderService $orders, MemberKycService $kyc, MemberMaterialNoticeService $materials): Response
     {
         abort_unless(app()->bound(YabandRemitCallbackVerifier::class), 503);
         abort_unless($request->isJson(), 415);
@@ -31,6 +32,8 @@ final class YabandRemitCallbackController
             $trade = $data['trade_id'] ?? null;
             abort_unless(($data['type'] ?? null) === 'transaction' && is_string($order) && is_string($trade), 422);
             $result = $orders->refreshNotified($order, $trade);
+        } elseif (($data['type'] ?? null) === 'question') {
+            $result = $materials->receive($data);
         } else {
             $user = $data['user'] ?? null;
             if (is_string($user)) {

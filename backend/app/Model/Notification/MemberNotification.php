@@ -14,13 +14,14 @@ use Illuminate\Support\Carbon;
  * @property int|null $sender_id
  * @property int|null $support_ticket_id
  * @property string|null $order_reference
+ * @property string|null $material_reference
  * @property string $request_id
  * @property string $title
  * @property string $body
  * @property Carbon|null $read_at
  * @property Carbon $created_at
  */
-#[Fillable(['member_id', 'sender_id', 'request_id', 'title', 'body', 'support_ticket_id', 'order_reference'])]
+#[Fillable(['member_id', 'sender_id', 'request_id', 'title', 'body', 'support_ticket_id', 'order_reference', 'material_reference'])]
 final class MemberNotification extends Model
 {
     public const UPDATED_AT = null;

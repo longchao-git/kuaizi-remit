@@ -10,6 +10,7 @@ use App\Repository\Remittance\RemittanceOrderRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\YabandException;
+use App\Service\Remittance\Yaband\YabandFailureMessage;
 use App\Service\Remittance\Yaband\YabandRemitClient;
 use DateTimeInterface;
 use Illuminate\Container\Attributes\Singleton;
@@ -136,7 +137,9 @@ final class RemittanceOrderService
             $this->saveState($order, $income, $outgoing, $refund);
 
             return Result::success($this->format($order, true));
-        } catch (YabandException|LockTimeoutException) {
+        } catch (YabandException $error) {
+            return Result::fail(YabandFailureMessage::forException($error, '暂无法查询雅本交易，请稍后重试'), 503);
+        } catch (LockTimeoutException) {
             return Result::fail('暂无法查询雅本交易，请稍后重试', 503);
         } finally {
             $lock->release();

@@ -23,6 +23,12 @@ final class MemberMaterialController extends AbstractController
         return $this->index($request, null);
     }
 
+    /** 按当前会员读取消息关联任务，避免目标不在第一页时无法打开。 */
+    public function show(Request $request, string $reference): JsonResponse
+    {
+        return $this->respond($this->materials->show((int) $request->user()->getKey(), strtolower($reference)));
+    }
+
     public function register(Request $request): JsonResponse
     {
         $input = $request->validate([

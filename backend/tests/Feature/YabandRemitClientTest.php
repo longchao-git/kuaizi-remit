@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\InstitutionPaymentFixture;
 use Tests\TestCase;
 
 final class YabandRemitClientTest extends TestCase
@@ -41,6 +42,21 @@ final class YabandRemitClientTest extends TestCase
         $this->travel(91)->seconds();
         $this->assertSame('next-token', $transport->token());
         Http::assertSentCount(2);
+    }
+
+    public function test_business_failure_retains_only_safe_path_and_code_for_classification(): void
+    {
+        Http::fake(['*/api/kyc/query' => Http::response([
+            'status' => false, 'code' => '-1005', 'message' => 'sensitive identity, card or token',
+        ])]);
+        try {
+            app(YabandTransport::class)->post('/api/kyc/query', [], 'fixture-token');
+            $this->fail('Business failure was accepted.');
+        } catch (YabandException $error) {
+            $this->assertSame(-1005, $error->upstreamCode);
+            $this->assertSame('/api/kyc/query', $error->upstreamPath);
+            $this->assertStringNotContainsString('sensitive', $error->getMessage());
+        }
     }
 
     public function test_connection_check_reports_signing_readiness_without_showing_credentials(): void
@@ -222,13 +238,13 @@ final class YabandRemitClientTest extends TestCase
         $this->assertTrue($kyc['can_submit_profile']);
         $this->assertArrayNotHasKey('user', $kyc);
 
-        $payee = '{"first_name":"测试","account":"fixture"}';
-        $this->assertSame(['trade_id' => 'test-trade'], $client->submitPayment(['request_id' => 'pay-id', 'payee' => $payee], true));
+        $payee = ' '.json_encode([...InstitutionPaymentFixture::fields()['payee'], 'first_name' => '测试', 'account' => 'fixture'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR).' ';
+        $this->assertSame(['trade_id' => 'test-trade'], $client->submitPayment([...InstitutionPaymentFixture::request(), 'payee' => $payee], true));
         $this->assertSame('02', $client->queryTransaction('order-id', 'test-trade', true)['transaction_info']['refund_status_code']);
         $this->assertSame('question-1', $client->submitMaterials('mat-id', 'question-1', 'fixture reply')['qno']);
         Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/api/whitelable/transaction/payment')
             && $request->hasHeader('Authorization', 'Bearer fixture-token')
-            && $request['sign'] === '/api/whitelable/transaction/payment|pay-id'
+            && $request['sign'] === '/api/whitelable/transaction/payment|'.InstitutionPaymentFixture::request()['request_id']
             && $request['data']['payee'] === $payee
             && $request['data']['type'] === 'transaction'
             && $request['data']['pay_method'] === 'online');

@@ -21,9 +21,10 @@
           </view>
           <text class="inbox-body">{{ item.body }}</text>
           <text class="inbox-time">{{ formatTime(item.created_at) }}</text>
-          <view v-if="!item.read_at || item.support_ticket_id || item.order_reference" class="inbox-item-actions">
+          <view v-if="!item.read_at || item.support_ticket_id || item.order_reference || item.material_reference" class="inbox-item-actions">
             <button v-if="item.support_ticket_id" class="inline-action accent" :disabled="busy" @tap="openTicket(item)">查看工单</button>
             <button v-if="item.order_reference" class="inline-action accent" :disabled="busy" @tap="openOrder(item)">查看订单</button>
+            <button v-if="item.material_reference" class="inline-action accent" :disabled="busy" @tap="openMaterial(item)">查看补件</button>
             <button v-if="!item.read_at" class="inline-action accent" :disabled="busy" @tap="mark(item.reference ?? item.id)">标为已读</button>
           </view>
         </view>
@@ -51,9 +52,10 @@ type Notice = {
   created_at: string;
   support_ticket_id?: string | null;
   order_reference?: string | null;
+  material_reference?: string | null;
 };
 type NoticePage = { list: Notice[]; unread_count: number; page: number; total_pages: number };
-const emit = defineEmits<{ expired: []; unread: [count: number]; ticket: [id: string]; order: [reference: string] }>();
+const emit = defineEmits<{ expired: []; unread: [count: number]; ticket: [id: string]; order: [reference: string]; material: [reference: string] }>();
 const props = defineProps<{ targetNotice?: string }>();
 const items = ref<Notice[]>([]);
 const pushedNotice = ref<Notice>();
@@ -193,6 +195,15 @@ function openOrder(item: Notice) {
   void run(async () => {
     await markLinkedRead(item);
     if (active) emit('order', reference);
+  });
+}
+
+function openMaterial(item: Notice) {
+  const reference = item.material_reference;
+  if (!reference) return;
+  void run(async () => {
+    await markLinkedRead(item);
+    if (active) emit('material', reference);
   });
 }
 

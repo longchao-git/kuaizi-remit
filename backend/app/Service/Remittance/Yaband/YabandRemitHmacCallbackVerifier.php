@@ -33,7 +33,8 @@ final readonly class YabandRemitHmacCallbackVerifier implements YabandRemitCallb
                 return false;
             }
             $data = array_key_exists('data', $decoded) ? $decoded['data'] : $decoded;
-            if (! is_array($data) || ($data['mid'] ?? null) !== $this->merchantId || ($data['type'] ?? null) !== $event) {
+            $allowedTypes = $event === 'kyc' ? ['kyc', 'question'] : ['transaction'];
+            if (! is_array($data) || ($data['mid'] ?? null) !== $this->merchantId || ! in_array($data['type'] ?? null, $allowedTypes, true)) {
                 return false;
             }
             unset($data['sign']);

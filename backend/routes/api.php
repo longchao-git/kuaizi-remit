@@ -144,6 +144,7 @@ Route::middleware(['auth:sanctum', RequireMemberToken::class])->prefix('app')->g
     Route::get('/remittance/payout-accounts', [MemberOrderController::class, 'accounts'])->middleware('throttle:30,1,remit-payout-accounts:');
     Route::get('/remittance/orders/{reference}', [MemberOrderController::class, 'show'])->whereUuid('reference');
     Route::get('/remittance/materials', [MemberMaterialController::class, 'memberIndex']);
+    Route::get('/remittance/materials/{reference}', [MemberMaterialController::class, 'show'])->whereUuid('reference');
     Route::post('/remittance/materials/{reference}', [MemberMaterialController::class, 'submit'])
         ->whereUuid('reference')->middleware('throttle:12,1,remit-material-submit:');
     Route::get('/remittance/drafts', [MemberDraftController::class, 'index']);

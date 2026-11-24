@@ -104,7 +104,7 @@ final class YabandTransport
             || ! in_array($body['code'] ?? null, [200, '200'], true) || ! is_array($body['data'] ?? null)) {
             $rawCode = is_array($body) ? ($body['code'] ?? null) : null;
             $code = filter_var($rawCode, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-            throw new YabandException('雅本汇款 API 未返回成功响应。', $code);
+            throw new YabandException('雅本汇款 API 未返回成功响应。', $code, $path);
         }
 
         return $body['data'];

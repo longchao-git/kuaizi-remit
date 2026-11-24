@@ -34,6 +34,7 @@ final class MemberCheckoutService
         private DatabaseManager $database,
         private MemberKycService $kyc,
         private YabandInstitutionPaymentRequest $institutionPayment,
+        private YabandWhiteLabelPaymentRequest $whiteLabelPayment,
     ) {}
 
     /** 查询结算适配器提供的本人账户，用于下单确认时选择。 */
@@ -111,6 +112,8 @@ final class MemberCheckoutService
             // 协议错误必须在订单及优惠券预留之前拒绝，不能让错误参数占用结算资源。
             if (! $prepared['white_label']) {
                 $fields = $this->institutionPayment->prepareFields($fields);
+            } else {
+                $fields = $this->whiteLabelPayment->prepareFields($fields);
             }
             $hash = hash_hmac('sha256', json_encode([$account, $prepared['white_label'], $fields], JSON_THROW_ON_ERROR), (string) config('app.key'));
             $order ??= $this->reserve((int) $member->id, $quoteReference, $snapshot, $prepared['white_label'], $hash);
@@ -146,7 +149,9 @@ final class MemberCheckoutService
             $this->orders->savePayment($order, $trade, $url);
 
             return $this->success($order);
-        } catch (YabandException|LockTimeoutException|JsonException) {
+        } catch (YabandException $error) {
+            return Result::fail(YabandFailureMessage::forException($error, '暂无法确认支付请求，请查询订单或使用原条件重试'), 503);
+        } catch (LockTimeoutException|JsonException) {
             return Result::fail('暂无法确认支付请求，请查询订单或使用原条件重试', 503);
         } finally {
             $lock->release();

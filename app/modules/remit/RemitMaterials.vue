@@ -2,8 +2,8 @@
   <view class="body material-list">
     <text v-if="error" class="description offer" role="alert">{{ error }}</text>
     <text v-if="!busy && !items.length && !error" class="description">暂无补件任务</text>
-    <view v-for="task in items" :key="task.reference" class="card material-card">
-      <text>{{ task.instruction }}</text>
+    <view v-for="task in displayedTasks" :key="task.reference" class="card material-card">
+      <text class="material-instruction">{{ task.instruction }}</text>
       <text class="description" v-if="task.order_reference">订单 {{ task.order_reference }}</text>
       <text class="description">截止 {{ new Date(task.deadline_at).toLocaleString() }}</text>
       <text class="description">{{ labels[task.status] }}</text>
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { BASE_URL } from '@/config/api';
 import request, { UnauthorizedError } from '@/request/http';
 import { sessionService } from '@/shared/session/application/SessionService';
@@ -61,10 +61,18 @@ interface Attachment {
 }
 
 const emit = defineEmits<{ expired: [] }>();
+const props = defineProps<{ targetReference?: string }>();
 const path = 'app/remittance/materials';
 const options = { handleUnauthorized: false };
 const labels = { '6001': '待提交', '6002': '已完成', '6003': '已过期' };
 const items = ref<Task[]>([]);
+const targetTask = ref<Task>();
+const displayedTasks = computed(() => {
+  const target = targetTask.value;
+  if (!target) return items.value;
+  return [items.value.find(task => task.reference === target.reference) ?? target,
+    ...items.value.filter(task => task.reference !== target.reference)];
+});
 const file = ref<Attachment>();
 const selected = ref('');
 const reply = ref('');
@@ -123,7 +131,13 @@ async function refreshTasks(next: number) {
   items.value = result.list;
   page.value = result.page;
   pages.value = result.total_pages;
-  if (selected.value && !result.list.some(task => task.reference === selected.value && task.can_submit)) {
+  if (props.targetReference) {
+    const linked = result.list.find(task => task.reference === props.targetReference)
+      ?? await request.get<Task>(`${path}/${encodeURIComponent(props.targetReference)}`, {}, options);
+    if (!active) return;
+    targetTask.value = linked;
+  }
+  if (selected.value && !displayedTasks.value.some(task => task.reference === selected.value && task.can_submit)) {
     selected.value = '';
     replaceFile();
     reply.value = '';
@@ -289,7 +303,10 @@ function submit(task: Task) {
   });
 }
 
-onMounted(() => load(1));
+onMounted(() => run(async () => {
+  await refreshTasks(1);
+  if (active && targetTask.value?.can_submit) selected.value = targetTask.value.reference;
+}));
 onUnmounted(() => {
   active = false;
   if (file.value !== uploadInProgress) release(file.value);
@@ -299,6 +316,7 @@ onUnmounted(() => {
 <style scoped>
 .material-list, .material-card { display: grid; gap: 16rpx; }
 .material-card { padding: 22rpx; overflow-wrap: anywhere; }
+.material-instruction { white-space: pre-wrap; overflow-wrap: anywhere; }
 .material-reply { box-sizing: border-box; width: 100%; padding: 16rpx; min-height: 120rpx; background: #f2f2f2; border-radius: 10rpx; }
 .attachment-actions { display: flex; flex-wrap: wrap; gap: 12rpx; }
 </style>

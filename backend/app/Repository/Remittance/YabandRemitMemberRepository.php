@@ -63,4 +63,12 @@ final class YabandRemitMemberRepository extends AbstractRepository
     {
         $link->forceFill(['uid' => $uid, 'statuses' => $statuses])->saveOrFail();
     }
+
+    /** 与固定创建请求编号一起保存外部编号，配置变动后重试仍沿用原身份。 */
+    public function rememberExternalUid(YabandRemitMember $link, string $externalUid): void
+    {
+        if ($link->external_uid === null) {
+            $link->forceFill(['external_uid' => $externalUid])->saveOrFail();
+        }
+    }
 }
