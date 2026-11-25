@@ -121,6 +121,8 @@ final class MemberKycService
                 return Result::fail('请先发起身份验证', 409);
             }
             $status = $this->client->queryKyc((string) Str::uuid(), $link->uid);
+            // 即使新状态阻止再次提交，也应保存已核对的最新状态并发送一次状态通知。
+            $this->syncState($link, $status);
             if (! $status['can_submit_profile']) {
                 return Result::fail('当前状态无法提交认证资料', 409);
             }

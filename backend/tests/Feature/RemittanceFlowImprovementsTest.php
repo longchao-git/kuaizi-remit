@@ -73,6 +73,21 @@ final class RemittanceFlowImprovementsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_repeating_an_initial_payout_draft_save_returns_original_revision_without_overwriting_later_edits(): void
+    {
+        $this->asMember(User::factory()->create());
+        $path = '/app/remittance/payout-account-drafts/'.Str::uuid();
+        $input = ['payout_method' => 'bank', 'first_name' => 'TEST', 'last_name' => 'ONLY', 'account' => 'fixture-8877'];
+        $created = $this->putJson($path, $input)->assertOk()->json('data');
+        $this->putJson($path, $input)->assertOk()->assertJsonPath('data.revision', $created['revision']);
+        $this->assertDatabaseCount('member_payout_account_drafts', 1);
+        $edited = $this->putJson($path, [...$input, 'first_name' => 'UPDATED', 'revision' => $created['revision']])->assertOk()->json('data');
+        $this->putJson($path, $input)->assertConflict();
+        $this->getJson('/app/remittance/payout-account-drafts')->assertOk()->assertJsonPath('data.list.0.revision', $edited['revision'])
+            ->assertJsonPath('data.list.0.first_name', 'UPDATED');
+        Http::assertNothingSent();
+    }
+
     public function test_new_migration_can_reapply_without_data_but_refuses_lossy_rollback(): void
     {
         $migration = require database_path('migrations/2026_11_24_000003_store_remittance_declarations_and_payout_drafts.php');
@@ -228,6 +243,8 @@ final class RemittanceFlowImprovementsTest extends TestCase
         ]);
         $this->assertSame(409, app(MemberKycService::class)->submitProfile($member, [])->getCode());
         $this->assertSame(409, app(MemberKycService::class)->submitProfile($member, [])->getCode());
+        $this->assertTrue($links->findFor($member->id)->statuses['kyc_passed']);
+        $this->assertDatabaseHas('member_notifications', ['member_id' => $member->id, 'title' => '身份认证已通过']);
         Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/api/kyc/profile'));
         $safe = YabandKycStatus::fromQuery([...$base, 'idv_status_code' => '2007', 'idv_reason' => 'secret document and personal data']);
         $this->assertNotNull($safe['guidance']);

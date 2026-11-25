@@ -121,6 +121,9 @@ final class MemberCheckoutService
                 $fields = $this->whiteLabelPayment->prepareFields($fields);
             }
             $payee = is_string($fields['payee'] ?? null) ? json_decode($fields['payee'], true, 16, JSON_THROW_ON_ERROR) : ($fields['payee'] ?? []);
+            if (($payee['relationship'] ?? null) !== '01') {
+                throw new YabandException('本项目只支持本人收款账户。');
+            }
             if (($payee['source_of_funds'] ?? null) !== $declaration['source_of_funds']
                 || ($payee['purpose_and_explanation_of_the_transfer'] ?? null) !== $declaration['purpose']
                 || ($payee['explanation'] ?? '') !== $declaration['explanation']) {

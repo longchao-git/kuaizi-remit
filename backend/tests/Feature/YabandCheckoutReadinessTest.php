@@ -164,6 +164,7 @@ final class YabandCheckoutReadinessTest extends TestCase
             [['payee' => ['account' => '']]], [['payee' => ['channel' => 'bank']]],
             [['payee' => ['amount' => '805.401']]], [['payee' => ['exchange_rate' => null]]],
             [['payee' => ['purpose_and_explanation_of_the_transfer' => '05']]],
+            [['payee' => ['relationship' => '02']]],
             [['customer_fee' => null]], [['device' => null]], [['timeout' => '1441']],
             [['sub_pay_method' => 'IDEAL']], [['sub_pay_method' => 'SEPA']],
         ];

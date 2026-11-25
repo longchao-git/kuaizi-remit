@@ -42,6 +42,15 @@ final class MemberPayoutAccountDraftService
             if ($draft !== null && (int) $draft->member_id !== $member) {
                 return Result::fail('收款资料不存在', 404);
             }
+            $submittedDetails = [
+                'first_name' => trim($input['first_name']), 'last_name' => trim($input['last_name']),
+                'account' => trim($input['account'] ?? ''),
+            ];
+            // 首次保存的响应丢失时，相同请求只读取原结果；不能改写资料或绕过编辑版本检查。
+            if ($draft !== null && ($input['revision'] ?? null) === null
+                && $draft->payout_method === $input['payout_method'] && $draft->details === $submittedDetails) {
+                return Result::success($this->present($draft));
+            }
             if (($draft === null && ! empty($input['revision']))
                 || ($draft !== null && $draft->revision !== ($input['revision'] ?? null))) {
                 return Result::fail('收款资料已更新，请刷新后重新编辑', 409);
@@ -56,7 +65,7 @@ final class MemberPayoutAccountDraftService
             }
             $saved = $this->drafts->save($draft, [
                 'reference' => $reference, 'member_id' => $member, 'payout_method' => $input['payout_method'],
-                'details' => ['first_name' => trim($input['first_name']), 'last_name' => trim($input['last_name']), 'account' => $account],
+                'details' => [...$submittedDetails, 'account' => $account],
                 'revision' => (string) Str::uuid(),
             ]);
 
