@@ -192,11 +192,14 @@ final class RemittanceOrderService
             $this->orders->saveProviderState($order, $income, $outgoing, $refund);
             $this->coupons->syncOrder($order->reference, $income, $refund);
             if ($title !== null) {
-                $this->notices->send((int) $order->member_id, null, [
+                $notice = $this->notices->send((int) $order->member_id, null, [
                     'request_id' => (string) Str::uuid(), 'title' => $title,
                     'body' => '请在汇款订单查看详情。订单编号 '.$order->reference,
                     'order_reference' => $order->reference,
                 ], broadcast: false);
+                if ($notice->isFail()) {
+                    throw new YabandException('订单状态通知未能保存。');
+                }
             }
         });
         if ($title !== null) {

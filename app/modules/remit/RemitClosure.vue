@@ -14,6 +14,14 @@
       <text v-if="item.reason" class="description">{{ item.reason }}</text>
       <text v-if="item.review_note" class="description">审核说明：{{ item.review_note }}</text>
       <text v-if="item.reviewed_at" class="description">{{ new Date(item.reviewed_at).toLocaleString() }}</text>
+      <template v-if="item.status === 'approved'">
+        <view class="line">
+          <text>注销执行</text>
+          <text>{{ executionLabels[item.execution_status ?? 'not_started'] || '待核实' }}</text>
+        </view>
+        <text v-if="item.execution_note" class="description">{{ item.execution_note }}</text>
+        <text v-if="item.executed_at" class="description">完成时间 {{ new Date(item.executed_at).toLocaleString() }}</text>
+      </template>
     </view>
     <view v-if="pages > 1" class="line">
       <button class="inline-action" :disabled="busy || page === 1" @tap="load(page - 1)">上一页</button>
@@ -25,10 +33,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
 
-const labels = { pending: '待审核', approved: '审核通过，待执行', rejected: '审核未通过' };
+const labels = { pending: '待审核', approved: '审核通过', rejected: '审核未通过' };
+const executionLabels: Record<string, string> = {
+  not_started: '待执行', processing: '处理中', pending_confirmation: '待核实', completed: '已注销',
+};
 interface Closure {
   id: string;
   status: keyof typeof labels;
@@ -36,6 +47,9 @@ interface Closure {
   review_note: string | null;
   reviewed_at: string | null;
   created_at: string;
+  execution_status?: string;
+  execution_note?: string | null;
+  executed_at?: string | null;
 }
 
 const emit = defineEmits<{ expired: [] }>();
@@ -49,9 +63,12 @@ const loaded = ref(false);
 const canSubmit = ref(false);
 const page = ref(1);
 const pages = ref(1);
+let active = true;
+let confirming = false;
 
 async function readRecords(next: number) {
   const result = await request.get<{ list: Closure[]; page: number; total_pages: number }>(path, { page: next }, options);
+  if (!active) return;
   items.value = result.list;
   page.value = result.page;
   pages.value = result.total_pages;
@@ -60,12 +77,13 @@ async function readRecords(next: number) {
 }
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
     await action();
   } catch (failure) {
+    if (!active) return;
     if (failure instanceof UnauthorizedError) emit('expired');
     else error.value = failure instanceof Error ? failure.message : '操作失败，请重试';
   } finally {
@@ -78,24 +96,29 @@ function load(next: number) {
 }
 
 function confirm() {
+  if (!active || busy.value || confirming || !canSubmit.value) return;
+  confirming = true;
   uni.showModal({
     title: '确认提交注销申请',
     content: '提交后仍可登录查看申请与订单进度。',
     confirmText: '提交申请',
     success: ({ confirm: accepted }) => {
-      if (!accepted) return;
+      if (!accepted || !active) return;
       void run(async () => {
         const item = await request.post<Closure>(path, { reason: reason.value.trim() || null }, options);
+        if (!active) return;
         canSubmit.value = false;
         reason.value = '';
         items.value = [item, ...items.value.filter(existing => existing.id !== item.id)];
         await readRecords(1);
       });
     },
+    complete: () => { confirming = false; },
   });
 }
 
 onMounted(() => { void load(1); });
+onUnmounted(() => { active = false; });
 </script>
 
 <style scoped lang="scss">

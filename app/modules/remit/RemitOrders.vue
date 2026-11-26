@@ -99,6 +99,7 @@ const page = ref(1);
 const pages = ref(0);
 let active = true;
 let awaitingReturn = false;
+let returnQueued = false;
 let poll: ReturnType<typeof setTimeout> | undefined;
 let remainingPolls = 0;
 
@@ -115,10 +116,23 @@ function unsettled(order: Order): boolean {
 }
 
 function returned() {
-  if (!awaitingReturn || !active || !props.pageVisible || busy.value) return;
+  if (!awaitingReturn || !canAutoRefresh()) return;
+  if (busy.value) {
+    returnQueued = true;
+    return;
+  }
+  returnQueued = false;
   awaitingReturn = false;
   remainingPolls = 2;
   void refreshDetail(true);
+}
+
+function canAutoRefresh(): boolean {
+  let visible = props.pageVisible;
+  // #ifdef H5
+  visible = visible && document.visibilityState === 'visible';
+  // #endif
+  return active && visible;
 }
 
 async function refreshDetail(automatic = false) {
@@ -132,7 +146,7 @@ async function refreshDetail(automatic = false) {
     detail.value = fresh;
     succeeded = true;
   });
-  if (automatic && succeeded && active && props.pageVisible && detail.value && unsettled(detail.value) && remainingPolls > 0) {
+  if (automatic && succeeded && canAutoRefresh() && detail.value && unsettled(detail.value) && remainingPolls > 0) {
     remainingPolls -= 1;
     poll = setTimeout(() => { void refreshDetail(true); }, 12000);
   }
@@ -145,22 +159,25 @@ function statusTone(order: Order) {
 }
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
     await action();
   } catch (reason) {
+    if (!active) return;
     if (reason instanceof UnauthorizedError && active) emit('expired');
     else error.value = getErrorMessage(reason, '读取订单失败，请稍后重试');
   } finally {
     busy.value = false;
+    if (returnQueued && canAutoRefresh()) returned();
   }
 }
 
 function load(next: number) {
   return run(async () => {
     const result = await request.get<{ list: Order[]; page: number; total_pages: number }>(path, { page: next }, options);
+    if (!active) return;
     items.value = result.list;
     page.value = result.page;
     pages.value = result.total_pages;
@@ -195,6 +212,7 @@ function continuePayment() {
     try {
     // #endif
       const fresh = await fetchOrder(reference, detail.value?.can_refresh === true);
+      if (!active) return;
       detail.value = fresh;
       if (!fresh.payment_url || !/^https:\/\//.test(fresh.payment_url)) {
         throw new Error('付款链接已不可用，请查看最新订单状态');
@@ -219,6 +237,7 @@ function back(): boolean {
   detail.value = undefined;
   clearTimeout(poll);
   awaitingReturn = false;
+  returnQueued = false;
   error.value = '';
   emit('detail', false);
   if (!items.value.length) void load(1);
@@ -246,13 +265,15 @@ onMounted(async () => {
   // #endif
   if (props.initialOrder) {
     await open(props.initialOrder);
-    if (active && detail.value?.can_refresh) await refreshDetail();
+    if (canAutoRefresh() && detail.value?.can_refresh) await refreshDetail();
   } else {
     await load(1);
   }
 });
 onUnmounted(() => {
   active = false;
+  returnQueued = false;
+  awaitingReturn = false;
   clearTimeout(poll);
   // #ifdef H5
   document.removeEventListener('visibilitychange', visibilityChanged);

@@ -76,7 +76,7 @@ let pending: { key: string; id: string } | undefined;
 let active = true;
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
@@ -94,6 +94,7 @@ async function run(action: () => Promise<void>) {
 
 async function query(next: number) {
   const result = await request.get<{ list: Ticket[]; page: number; total_pages: number }>(path, { page: next }, options);
+  if (!active) return;
   items.value = result.list;
   page.value = result.page;
   pages.value = result.total_pages;
@@ -105,7 +106,8 @@ function load(next: number) {
 
 function open(id: string) {
   void run(async () => {
-    detail.value = await request.get<TicketDetail>(`${path}/${id}`, {}, options);
+    const result = await request.get<TicketDetail>(`${path}/${id}`, {}, options);
+    if (active) detail.value = result;
   });
 }
 
@@ -116,6 +118,7 @@ function submit() {
     const key = JSON.stringify(input);
     if (pending?.key !== key) pending = { key, id: makeMessageId() };
     const ticket = await request.post<Ticket>(path, { ...input, client_id: pending.id }, options);
+    if (!active) return;
     pending = undefined;
     subject.value = '';
     body.value = '';

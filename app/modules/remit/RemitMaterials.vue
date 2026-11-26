@@ -62,7 +62,7 @@ interface Attachment {
   cachePath?: string;
 }
 
-const emit = defineEmits<{ expired: [] }>();
+const emit = defineEmits<{ expired: []; leave: [] }>();
 const props = defineProps<{ targetReference?: string }>();
 const path = 'app/remittance/materials';
 const options = { handleUnauthorized: false };
@@ -93,6 +93,7 @@ let formats = 'JPG、PNG';
 formats = 'PDF、JPG、PNG';
 // #endif
 let active = true;
+let confirming = false;
 let uploadInProgress: Attachment | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -125,7 +126,7 @@ function replaceFile(attachment?: Attachment) {
 }
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
@@ -163,15 +164,56 @@ async function refreshTasks(next: number) {
 }
 
 function load(next: number) {
+  if (!active || busy.value || choosing.value || confirming) return;
+  if (next !== page.value && hasUnsubmitted()) {
+    confirmDiscard(() => {
+      selected.value = '';
+      reply.value = '';
+      replaceFile();
+      void run(() => refreshTasks(next));
+    });
+    return;
+  }
   return run(() => refreshTasks(next));
 }
 
 function select(task: Task) {
-  if (busy.value || choosing.value) return;
-  selected.value = task.reference;
-  reply.value = '';
-  replaceFile();
-  error.value = '';
+  if (!active || busy.value || choosing.value || task.reference === selected.value) return;
+  confirmDiscard(() => {
+    selected.value = task.reference;
+    reply.value = '';
+    replaceFile();
+    error.value = '';
+  });
+}
+
+function hasUnsubmitted(): boolean {
+  return Boolean(selected.value && (reply.value.trim() || file.value));
+}
+
+function confirmDiscard(action: () => void) {
+  if (confirming) return;
+  if (!hasUnsubmitted()) {
+    action();
+    return;
+  }
+  confirming = true;
+  uni.showModal({
+    title: '放弃本次补件编辑？', content: '未提交的回复和附件将丢失。',
+    success: result => {
+      if (result.confirm && active) {
+        action();
+      }
+    },
+    complete: () => { confirming = false; },
+  });
+}
+
+function back(): boolean {
+  if (busy.value || choosing.value || confirming) return true;
+  if (!hasUnsubmitted()) return false;
+  confirmDiscard(() => emit('leave'));
+  return true;
 }
 
 function choose() {
@@ -337,6 +379,7 @@ onUnmounted(() => {
   clearInterval(timer);
   if (file.value !== uploadInProgress) release(file.value);
 });
+defineExpose({ back });
 </script>
 
 <style scoped>

@@ -44,7 +44,10 @@
     <RemitTickets v-else-if="ticketsOpen" ref="tickets" :initial-ticket="noticeTicket" :order-reference="ticketOrder" @expired="expire" />
     <RemitKyc v-else-if="kycOpen" :page-visible="props.pageVisible" @expired="expire" />
     <RemitPayoutDrafts v-else-if="payoutDraftsOpen" ref="payoutDraftsView" @expired="expire" />
-    <RemitMaterials v-else-if="materialsOpen" :target-reference="materialTarget" @expired="expire" />
+    <RemitMaterials
+      v-else-if="materialsOpen" ref="materialsView" :target-reference="materialTarget"
+      @expired="expire" @leave="closeMaterials"
+    />
     <RemitClosure v-else-if="closureOpen" @expired="expire" />
     <RemitSupportConversation
       v-else-if="chatOpen" :live="live" :messages="messages" :sending="sending" :status="status"
@@ -264,6 +267,7 @@ const ordersOpen = ref(false);
 const profileOpen = ref(false);
 const settingsOpen = ref(false);
 const materialsOpen = ref(false);
+const materialsView = ref<InstanceType<typeof RemitMaterials>>();
 const payoutDraftsOpen = ref(false);
 const payoutDraftsView = ref<InstanceType<typeof RemitPayoutDrafts>>();
 const materialTarget = ref<string>();
@@ -400,8 +404,7 @@ function back() {
       if (!orderView.value?.back()) ordersOpen.value = false;
     }
   } else if (materialsOpen.value) {
-    materialsOpen.value = false;
-    materialTarget.value = undefined;
+    if (!materialsView.value?.back()) closeMaterials();
   } else if (payoutDraftsOpen.value) {
     if (!payoutDraftsView.value?.back()) payoutDraftsOpen.value = false;
   } else if (inboxOpen.value) {
@@ -419,6 +422,11 @@ function back() {
   } else if (!member.value && !busy.value) {
     emit('back');
   }
+}
+
+function closeMaterials() {
+  materialsOpen.value = false;
+  materialTarget.value = undefined;
 }
 
 function supportForOrder(reference: string) {

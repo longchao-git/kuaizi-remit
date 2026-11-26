@@ -92,6 +92,7 @@ let active = true;
 
 async function query(next: number) {
   const result = await request.get<NoticePage>('app/notifications', { page: next }, options);
+  if (!active) return;
   items.value = result.list;
   page.value = result.page;
   pages.value = result.total_pages;
@@ -103,12 +104,13 @@ async function query(next: number) {
 }
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
     await action();
   } catch (reason) {
+    if (!active) return;
     if (active && reason instanceof UnauthorizedError) emit('expired');
     error.value = reason instanceof Error ? reason.message : '操作失败，请重试';
   } finally {
@@ -125,6 +127,7 @@ async function run(action: () => Promise<void>) {
 }
 
 function openPush(reference: string) {
+  if (!active) return;
   if (busy.value) {
     targetPending = reference;
     return;
@@ -133,7 +136,9 @@ function openPush(reference: string) {
     reloadPending = false;
     pushedNotice.value = undefined;
     try {
-      pushedNotice.value = await request.get<Notice>('app/notifications/' + reference, {}, options);
+      const result = await request.get<Notice>('app/notifications/' + reference, {}, options);
+      if (!active) return;
+      pushedNotice.value = result;
     } catch (reason) {
       if (reason instanceof UnauthorizedError) throw reason;
       await query(1);
@@ -157,6 +162,7 @@ defineExpose({ refresh });
 function mark(id: number | string, through = false) {
   return run(async () => {
     await request.post(`app/notifications/${id}/read`, { through }, options);
+    if (!active) return;
     if (pushedNotice.value) {
       const pushed = pushedNotice.value.reference ?? pushedNotice.value.id;
       if (String(id) === String(pushed) || (through && String(pushed).padStart(18, '0') <= String(id).padStart(18, '0'))) {
@@ -218,7 +224,11 @@ onMounted(() => {
   if (props.targetNotice) void openPush(props.targetNotice);
   else void load(1);
 });
-onUnmounted(() => { active = false; });
+onUnmounted(() => {
+  active = false;
+  reloadPending = false;
+  targetPending = undefined;
+});
 </script>
 
 <style scoped lang="scss">

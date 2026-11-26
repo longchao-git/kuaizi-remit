@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
 import { couponBenefit, type MemberCoupon } from './memberCoupon';
 
@@ -42,21 +42,24 @@ const labels: Record<MemberCoupon['status'], string> = {
 };
 const page = ref(1);
 const pages = ref(0);
+let active = true;
 
 async function query(next: number) {
   const result = await request.get<{ list: MemberCoupon[]; page: number; total_pages: number }>('app/coupons', { page: next }, options);
+  if (!active) return;
   items.value = result.list;
   page.value = result.page;
   pages.value = result.total_pages;
 }
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
     await action();
   } catch (reason) {
+    if (!active) return;
     if (reason instanceof UnauthorizedError) emit('expired');
     error.value = reason instanceof Error ? reason.message : '操作失败，请重试';
   } finally {
@@ -75,6 +78,7 @@ function claim() {
       return;
     }
     await request.post('app/coupons/claim', { code: code.value.trim() }, options);
+    if (!active) return;
     code.value = '';
     uni.showToast({ title: '已领取优惠券', icon: 'success' });
     await query(1);
@@ -84,12 +88,14 @@ function claim() {
 function claimOffer(id: string) {
   return run(async () => {
     const coupon = await request.post<MemberCoupon>(`app/coupons/${encodeURIComponent(id)}/claim`, {}, options);
+    if (!active) return;
     items.value = items.value.map(item => item.id === id ? coupon : item);
     uni.showToast({ title: '已领取优惠券', icon: 'success' });
   });
 }
 
 onMounted(() => void load(1));
+onUnmounted(() => { active = false; });
 </script>
 
 <style scoped lang="scss">

@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import request, { UnauthorizedError, ValidationError } from '@/request/http';
 
 interface PayoutDraft {
@@ -59,14 +59,17 @@ const busy = ref(false);
 const error = ref('');
 const page = ref(1);
 const pages = ref(0);
+let active = true;
+let confirming = false;
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
     await action();
   } catch (reason) {
+    if (!active) return;
     if (reason instanceof UnauthorizedError) emit('expired');
     else if (reason instanceof ValidationError) error.value = '请检查姓名及收款账号，每项最多64字';
     else error.value = reason instanceof Error ? reason.message : '收款资料操作失败，请重试';
@@ -77,6 +80,7 @@ async function run(action: () => Promise<void>) {
 
 async function query(next: number) {
   const result = await request.get<{ list: PayoutDraft[]; page: number; total_pages: number }>(path, { page: next }, options);
+  if (!active) return;
   rows.value = result.list;
   page.value = result.page;
   pages.value = result.total_pages;
@@ -87,6 +91,7 @@ function load(next: number) {
 }
 
 function edit(row?: PayoutDraft) {
+  if (!active || busy.value) return;
   reference.value = row?.reference ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => {
     const random = Math.floor(Math.random() * 16);
     return (character === 'x' ? random : (random & 3) | 8).toString(16);
@@ -106,6 +111,7 @@ function save() {
     const input = Object.fromEntries(Object.entries(form.value).map(([key, value]) => [key, value.trim()]));
     if (!input.first_name || !input.last_name || (!input.account && !revision.value)) throw new Error('请填写本人姓名和收款账号');
     await request.put<PayoutDraft>(`${path}/${reference.value}`, { ...input, revision: revision.value }, options);
+    if (!active) return;
     editing.value = false;
     form.value.account = '';
     uni.showToast({ title: '已保存，待核验', icon: 'none' });
@@ -114,22 +120,25 @@ function save() {
 }
 
 function back(): boolean {
-  if (busy.value) return true;
+  if (busy.value || confirming) return true;
   if (!editing.value) return false;
+  confirming = true;
   uni.showModal({
     title: '放弃本次编辑？', content: '未保存的修改将丢失。',
     success: result => {
-      if (result.confirm) {
+      if (result.confirm && active) {
         editing.value = false;
         form.value.account = '';
         error.value = '';
       }
     },
+    complete: () => { confirming = false; },
   });
   return true;
 }
 
 onMounted(() => { void load(1); });
+onUnmounted(() => { active = false; });
 defineExpose({ back });
 </script>
 
