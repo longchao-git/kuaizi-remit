@@ -48,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import request, { UnauthorizedError, ValidationError } from '@/request/http';
 
 interface KycStatus {
@@ -95,6 +95,9 @@ const documentTypes = [
 ];
 const genders = [{ label: '男', value: 'M' }, { label: '女', value: 'F' }];
 const options = { handleUnauthorized: false };
+let active = true;
+let awaitingReturn = false;
+let refreshQueued = false;
 const kycLabels: Record<string, string> = {
   '5001': '待认证', '5002': '审核中', '5003': '需更新资料', '5004': '认证通过', '5005': '认证未通过',
 };
@@ -111,12 +114,13 @@ const canEditProfile = computed(() => Boolean(
 ));
 
 async function run(action: () => Promise<void>) {
-  if (busy.value) return;
+  if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
   try {
     await action();
   } catch (reason) {
+    if (!active) return;
     if (reason instanceof UnauthorizedError) emit('expired');
     else if (reason instanceof ValidationError) {
       fieldErrors.value = Object.fromEntries(Object.keys(reason.fields).map(field => [field, '请检查该项的格式和范围']));
@@ -125,28 +129,45 @@ async function run(action: () => Promise<void>) {
     else error.value = reason instanceof Error ? reason.message : '操作失败，请重试';
   } finally {
     busy.value = false;
+    if (active && refreshQueued && props.pageVisible) {
+      refreshQueued = false;
+      refresh();
+    }
   }
 }
 
 function start() {
   void run(async () => {
     const session = await request.post<{ url: string }>('app/kyc/idv', {}, options);
+    if (!active) return;
     if (!session.url.startsWith('https://')) throw new Error('未获取到安全的验证地址');
     url.value = session.url;
   });
 }
 
 function refresh() {
+  if (!active || !props.pageVisible) return;
+  if (busy.value) {
+    refreshQueued = true;
+    return;
+  }
+  refreshQueued = false;
   void run(async () => {
-    status.value = await request.get<KycStatus>('app/kyc/status', {}, options);
+    const latest = await request.get<KycStatus>('app/kyc/status', {}, options);
+    if (!active) return;
+    status.value = latest;
     if (status.value.registered && !status.value.can_start_idv) url.value = '';
   });
 }
 
 function launch() {
-  if (!url.value) return;
+  if (!url.value || !active || busy.value) return;
+  awaitingReturn = true;
   // #ifdef APP-PLUS
-  plus.runtime.openURL(url.value, () => { error.value = '无法打开验证页面，请重试'; });
+  plus.runtime.openURL(url.value, () => {
+    awaitingReturn = false;
+    if (active) error.value = '无法打开验证页面，请重试';
+  });
   // #endif
   // #ifdef H5
   const link = document.createElement('a');
@@ -156,6 +177,15 @@ function launch() {
   link.click();
   // #endif
 }
+
+// #ifdef H5
+function returnedFromBrowser() {
+  if (document.visibilityState === 'visible' && awaitingReturn && props.pageVisible) {
+    awaitingReturn = false;
+    refresh();
+  }
+}
+// #endif
 
 function selectDocument(event: { detail: { value: string | number } }) {
   profile.id_type = documentTypes[Number(event.detail.value)]?.value ?? '';
@@ -186,11 +216,13 @@ function submitProfile() {
       fieldErrors.value.birthday = '出生日期必须早于今天';
     }
     if (Object.keys(fieldErrors.value).length) throw new Error('请核对证件有效期和出生日期');
-    status.value = await request.post<KycStatus>('app/kyc/profile', {
+    const latest = await request.post<KycStatus>('app/kyc/profile', {
       ...identity,
       nationality: identity.nationality.toUpperCase(),
       address: { ...address, country: address.country.toUpperCase() },
     }, options);
+    if (!active) return;
+    status.value = latest;
     Object.assign(profile, newProfile());
     profileOpen.value = false;
     fieldErrors.value = {};
@@ -205,8 +237,26 @@ watch(canEditProfile, (allowed) => {
     Object.assign(profile, newProfile());
   }
 });
-watch(() => props.pageVisible, (visible) => { if (visible) refresh(); });
-onMounted(refresh);
+watch(() => props.pageVisible, (visible) => {
+  if (visible) {
+    awaitingReturn = false;
+    refresh();
+  }
+});
+onMounted(() => {
+  // #ifdef H5
+  document.addEventListener('visibilitychange', returnedFromBrowser);
+  // #endif
+  refresh();
+});
+onUnmounted(() => {
+  active = false;
+  awaitingReturn = false;
+  refreshQueued = false;
+  // #ifdef H5
+  document.removeEventListener('visibilitychange', returnedFromBrowser);
+  // #endif
+});
 </script>
 
 <style scoped>

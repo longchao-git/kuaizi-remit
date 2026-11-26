@@ -30,6 +30,11 @@ final class YabandFailureMessageTest extends TestCase
         yield 'profile-mismatch' => ['/api/kyc/profile', -1021, '证件信息'];
         yield 'profile-address' => ['/api/kyc/profile', -1022, '居住地址不完整'];
         yield 'profile-declined' => ['/api/kyc/profile', -1023, '未获批准'];
+        yield 'idv-user-missing' => ['/api/kyc/idv', -1010, '未激活或无法找到'];
+        yield 'idv-kyc-state' => ['/api/kyc/idv', -1011, '查询最新认证进度'];
+        yield 'idv-session-state' => ['/api/kyc/idv', -1012, '查询最新认证进度'];
+        yield 'idv-compliance' => ['/api/kyc/idv', -1013, '未获受理'];
+        yield 'idv-denial-other-context' => ['/api/kyc/new', -1013, '原有提示'];
         yield 'bad-question' => ['/api/materials/update', -1030, '补件任务未被识别'];
         yield 'bad-transaction' => ['/api/materials/update', -1031, '关联交易需要核实'];
         yield 'white-channel' => ['/api/whitelable/transaction/payment', -1040, '支付方式不受支持'];

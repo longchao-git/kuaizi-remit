@@ -29,6 +29,17 @@ final class YabandFailureMessage
         if ($path === '/api/kyc/query' && $error->upstreamCode === -1010) {
             return '认证账户未激活或无法找到，请联系客服核实';
         }
+        if ($path === '/api/kyc/idv') {
+            $message = match ($error->upstreamCode) {
+                -1010 => '认证账户未激活或无法找到，请联系客服核实',
+                -1011, -1012 => '当前状态无法发起身份验证，请先查询最新认证进度',
+                -1013 => '本次身份验证未获受理，请联系客服核实',
+                default => null,
+            };
+            if ($message !== null) {
+                return $message;
+            }
+        }
         if ($path === '/api/kyc/profile' && $error->upstreamCode === -1020) {
             return '请先完成身份验证并查询最新认证状态，再提交身份资料';
         }

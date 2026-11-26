@@ -15,6 +15,7 @@ use App\Controller\Admin\Platform\SessionController;
 use App\Controller\Admin\Platform\StatusReasonController;
 use App\Controller\Common\AgreementController;
 use App\Controller\Common\HealthController;
+use App\Controller\Common\KycReturnController;
 use App\Controller\Common\MemberClosureController;
 use App\Controller\Common\MemberDraftController;
 use App\Controller\Common\MemberKycController;
@@ -38,6 +39,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', HealthController::class)->name('api.root');
 Route::get('/health', HealthController::class)->name('api.health');
+Route::get('/kyc/return', KycReturnController::class)->name('kyc.return');
 Route::get('/app/agreements/{kind}', [AgreementController::class, 'show'])
     ->whereIn('kind', ['terms', 'privacy']);
 Route::post('/callbacks/yaband/remit/{event}', YabandRemitCallbackController::class)->whereIn('event', ['transaction', 'kyc']);
