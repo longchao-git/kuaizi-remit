@@ -1,42 +1,88 @@
 <template>
-  <view class="body material-list">
+  <view class="body material-list" :class="{ 'is-editor': editorTask }">
     <text v-if="error" class="description offer" role="alert">{{ error }}</text>
-    <text v-if="!busy && !items.length && !error" class="description">暂无补件任务</text>
-    <view v-for="task in displayedTasks" :key="task.reference" class="card material-card">
-      <text class="material-instruction">{{ task.instruction }}</text>
-      <text class="description" v-if="task.order_reference">订单 {{ task.order_reference }}</text>
-      <text class="description">截止 {{ new Date(task.deadline_at).toLocaleString() }}</text>
-      <text class="description">{{ labels[task.status] }}</text>
-      <template v-if="selected === task.reference && task.can_submit">
-        <textarea v-model="reply" maxlength="6000" class="material-reply" placeholder="填写回复" :disabled="busy" />
-        <text class="description">附件可选。{{ formats }}，单个最大 75,000 字节。</text>
-        <!-- #ifdef APP-PLUS -->
-        <view class="attachment-actions">
-          <button class="inline-action" :disabled="busy || choosing" @tap="choose">拍照或选图</button>
-          <button class="inline-action" :disabled="busy || choosing" @tap="choosePdf">选择 PDF</button>
+    <template v-if="editorTask">
+      <view class="material-editor-heading">
+        <text class="heading material-editor-title">资金来源证明</text>
+        <text class="description">{{ editorTask.instruction }}</text>
+      </view>
+      <view v-if="editorTask.can_submit" class="material-editor-fields">
+        <view v-if="file" class="line material-file">
+          <view class="material-file-label">
+            <image src="/static/remit/document.svg" mode="aspectFit" aria-hidden="true" />
+            <view class="material-file-name">
+              <text class="block">{{ file.name }}</text>
+              <text class="material-deadline">已选附件</text>
+            </view>
+          </view>
+          <button class="inline-action" :disabled="busy || choosing" @tap="replaceFile()">移除附件</button>
         </view>
-        <!-- #endif -->
-        <!-- #ifndef APP-PLUS -->
-        <button class="inline-action" :disabled="busy || choosing" @tap="choose">选择附件</button>
-        <!-- #endif -->
-        <text v-if="file" class="description">{{ file.name }}</text>
-        <button v-if="file" class="inline-action" :disabled="busy || choosing" @tap="replaceFile()">移除附件</button>
-        <button class="primary" :disabled="busy || choosing || !reply.trim()" @tap="submit(task)">提交补件</button>
-      </template>
-      <button v-else-if="task.can_submit" class="inline-action accent" :disabled="busy || choosing" @tap="select(task)">
-        补充资料
-      </button>
-    </view>
-    <view v-if="pages > 1" class="line">
-      <button class="inline-action" :disabled="busy || choosing || page <= 1" @tap="load(page - 1)">上一页</button>
-      <text>{{ page }} / {{ pages }}</text>
-      <button class="inline-action" :disabled="busy || choosing || page >= pages" @tap="load(page + 1)">下一页</button>
-    </view>
-    <button class="inline-action accent" :disabled="busy || choosing" @tap="load(page)">刷新</button>
+        <view class="material-upload">
+          <text class="material-upload-plus" aria-hidden="true">+</text>
+          <view class="material-upload-copy">
+            <view class="attachment-actions">
+              <!-- #ifdef APP-PLUS -->
+              <button class="inline-action accent" :disabled="busy || choosing" @tap="choose">拍照或选图</button>
+              <button class="inline-action accent" :disabled="busy || choosing" @tap="choosePdf">选择 PDF</button>
+              <!-- #endif -->
+              <!-- #ifndef APP-PLUS -->
+              <button class="inline-action accent" :disabled="busy || choosing" @tap="choose">选择附件</button>
+              <!-- #endif -->
+            </view>
+            <text class="material-deadline">{{ formats }}，附件可选，单个最大 75,000 字节</text>
+          </view>
+        </view>
+        <view class="card material-reply-card">
+          <text class="material-reply-title">补件回复</text>
+          <textarea v-model="reply" maxlength="6000" class="material-reply" placeholder="填写回复"
+            aria-label="填写补件回复" :disabled="busy" />
+        </view>
+      </view>
+      <view class="line material-meta material-editor-meta">
+        <text v-if="editorTask.order_reference">订单 {{ editorTask.order_reference }}</text>
+        <text>截止 {{ formatRemitTimestamp(editorTask.deadline_at) }}</text>
+      </view>
+      <text v-if="!editorTask.can_submit" class="description" role="status">
+        补件状态为{{ labels[editorTask.status] }}，当前无法提交。
+      </text>
+      <view v-else class="material-editor-footer">
+        <button class="primary" :disabled="busy || choosing || !reply.trim()" @tap="submit(editorTask)">
+          {{ busy ? '正在提交…' : '提交补件' }}
+        </button>
+      </view>
+    </template>
+    <template v-else>
+      <text v-if="!busy && !displayedTasks.length && !error" class="description">暂无补件任务</text>
+      <view v-if="displayedTasks.some(task => task.can_submit)" class="material-heading">
+        <view class="material-heading-icon">
+          <image src="/static/remit/document.svg" mode="aspectFit" aria-hidden="true" />
+        </view>
+        <text>需要补充资料</text>
+        <text class="description material-heading-detail">请按下方任务要求补充资料。</text>
+      </view>
+      <view v-for="task in displayedTasks" :key="task.reference" class="card material-card">
+        <view class="line material-meta">
+          <text v-if="task.order_reference">订单 {{ task.order_reference }}</text>
+          <text class="material-tag" :class="`material-tag-${task.status}`">{{ labels[task.status] }}</text>
+        </view>
+        <text class="material-instruction">{{ task.instruction }}</text>
+        <text class="material-deadline">截止 {{ formatRemitTimestamp(task.deadline_at) }}</text>
+        <button v-if="task.can_submit" class="primary material-continue" :disabled="busy || choosing" @tap="select(task)">
+          补充资料
+        </button>
+      </view>
+      <view v-if="pages > 1" class="line">
+        <button class="inline-action" :disabled="busy || choosing || page <= 1" @tap="load(page - 1)">上一页</button>
+        <text>{{ page }} / {{ pages }}</text>
+        <button class="inline-action" :disabled="busy || choosing || page >= pages" @tap="load(page + 1)">下一页</button>
+      </view>
+      <button class="inline-action accent" :disabled="busy || choosing" @tap="load(page)">刷新</button>
+    </template>
   </view>
 </template>
 
 <script setup lang="ts">
+import { formatRemitTimestamp } from './previewOrder';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { BASE_URL } from '@/config/api';
 import request, { UnauthorizedError } from '@/request/http';
@@ -81,6 +127,8 @@ const displayedTasks = computed(() => {
 });
 const file = ref<Attachment>();
 const selected = ref('');
+const editorTask = computed(() => displayedTasks.value.find(task => task.reference === selected.value));
+const pageTitle = computed(() => editorTask.value ? '上传资料' : '补充资料');
 const reply = ref('');
 const busy = ref(false);
 const choosing = ref(false);
@@ -125,6 +173,12 @@ function replaceFile(attachment?: Attachment) {
   file.value = attachment;
 }
 
+function clearEditor() {
+  selected.value = '';
+  reply.value = '';
+  replaceFile();
+}
+
 async function run(action: () => Promise<void>) {
   if (!active || busy.value) return;
   busy.value = true;
@@ -157,9 +211,7 @@ async function refreshTasks(next: number) {
     targetTask.value = received(linked);
   }
   if (selected.value && !displayedTasks.value.some(task => task.reference === selected.value && task.can_submit)) {
-    selected.value = '';
-    replaceFile();
-    reply.value = '';
+    clearEditor();
   }
 }
 
@@ -167,9 +219,7 @@ function load(next: number) {
   if (!active || busy.value || choosing.value || confirming) return;
   if (next !== page.value && hasUnsubmitted()) {
     confirmDiscard(() => {
-      selected.value = '';
-      reply.value = '';
-      replaceFile();
+      clearEditor();
       void run(() => refreshTasks(next));
     });
     return;
@@ -178,11 +228,10 @@ function load(next: number) {
 }
 
 function select(task: Task) {
-  if (!active || busy.value || choosing.value || task.reference === selected.value) return;
+  if (!active || busy.value || choosing.value || !task.can_submit || task.reference === selected.value) return;
   confirmDiscard(() => {
+    clearEditor();
     selected.value = task.reference;
-    reply.value = '';
-    replaceFile();
     error.value = '';
   });
 }
@@ -211,8 +260,14 @@ function confirmDiscard(action: () => void) {
 
 function back(): boolean {
   if (busy.value || choosing.value || confirming) return true;
-  if (!hasUnsubmitted()) return false;
-  confirmDiscard(() => emit('leave'));
+  if (!selected.value) return false;
+  confirmDiscard(() => {
+    if (props.targetReference) emit('leave');
+    else {
+      clearEditor();
+      error.value = '';
+    }
+  });
   return true;
 }
 
@@ -346,9 +401,7 @@ function submit(task: Task) {
       if (active) {
         items.value = items.value.map(item => item.reference === task.reference ? received(result) : item);
         if (targetTask.value?.reference === result.reference) targetTask.value = received(result);
-        selected.value = '';
-        replaceFile();
-        reply.value = '';
+        clearEditor();
       }
     } catch (reason) {
       if (active && !(reason instanceof UnauthorizedError)) {
@@ -379,13 +432,178 @@ onUnmounted(() => {
   clearInterval(timer);
   if (file.value !== uploadInProgress) release(file.value);
 });
-defineExpose({ back });
+defineExpose({ back, pageTitle });
 </script>
 
 <style scoped>
-.material-list, .material-card { display: grid; gap: 16rpx; }
-.material-card { padding: 22rpx; overflow-wrap: anywhere; }
-.material-instruction { white-space: pre-wrap; overflow-wrap: anywhere; }
-.material-reply { box-sizing: border-box; width: 100%; padding: 16rpx; min-height: 120rpx; background: #f2f2f2; border-radius: 10rpx; }
-.attachment-actions { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.material-list,
+.material-card {
+  display: grid;
+  gap: 22rpx;
+}
+.material-list.is-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24rpx;
+  padding-bottom: calc(28rpx + env(safe-area-inset-bottom));
+}
+.material-editor-heading .description {
+  margin-top: 10rpx;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.material-editor-fields {
+  display: grid;
+  gap: 20rpx;
+}
+.material-reply-card {
+  display: grid;
+  gap: 14rpx;
+  padding: 24rpx 28rpx;
+  border-color: #e9e9f0;
+  border-radius: 36rpx;
+  box-shadow: 0 2rpx 5rpx rgba(31, 35, 48, 0.035);
+}
+.material-reply-title {
+  color: #111318;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+.material-editor-meta {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.material-editor-footer {
+  margin-top: auto;
+  padding-top: 24rpx;
+}
+.material-editor-footer .primary:not([disabled]) {
+  box-shadow: 0 10rpx 24rpx rgba(78, 61, 219, 0.21);
+}
+.material-heading {
+  display: grid;
+  justify-items: center;
+  gap: 16rpx;
+  padding: 36rpx 0 22rpx;
+  color: #111318;
+  font-size: 42rpx;
+  font-weight: 700;
+  text-align: center;
+}
+.material-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 260rpx;
+  height: 260rpx;
+  margin-bottom: 22rpx;
+  border-radius: 86rpx;
+  background: #fff2e9;
+}
+.material-heading-icon image {
+  width: 112rpx;
+  height: 112rpx;
+}
+.material-heading .material-heading-detail {
+  margin-top: 0;
+  font-weight: 400;
+}
+.material-card {
+  padding: 28rpx 32rpx;
+  overflow-wrap: anywhere;
+}
+.material-meta,
+.material-deadline {
+  color: #6d7180;
+  font-size: 23rpx;
+}
+.material-tag {
+  flex-shrink: 0;
+  padding: 5rpx 14rpx;
+  border-radius: 90rpx;
+  color: #5544d8;
+  background: #efedff;
+}
+.material-tag-6002 {
+  color: #18704d;
+  background: #e7f7ef;
+}
+.material-tag-6003 {
+  color: #6d7180;
+  background: #eff0f4;
+}
+.material-instruction {
+  color: #111318;
+  font-size: 28rpx;
+  font-weight: 700;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.material-reply {
+  box-sizing: border-box;
+  width: 100%;
+  height: 164rpx;
+  padding: 20rpx;
+  border: 1rpx solid #e7e7ef;
+  border-radius: 24rpx;
+  background: #f7f7fa;
+}
+.material-upload,
+.material-file {
+  padding: 18rpx 28rpx;
+  border: 2rpx dashed #bdb4ff;
+  border-radius: 32rpx;
+}
+.material-upload {
+  display: grid;
+  grid-template-columns: 86rpx minmax(0, 1fr);
+  align-items: center;
+  gap: 20rpx;
+  min-height: 164rpx;
+  box-sizing: border-box;
+}
+.material-upload-plus {
+  display: grid;
+  place-items: center;
+  height: 86rpx;
+  border-radius: 28rpx;
+  background: #eeebff;
+  color: var(--remit-accent);
+  font-size: 42rpx;
+  font-weight: 700;
+}
+.material-upload-copy {
+  min-width: 0;
+}
+.material-file {
+  border: 1rpx solid #83ba9d;
+  background: #f6fcf8;
+}
+.material-file-label {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-width: 0;
+}
+.material-file-label image {
+  flex-shrink: 0;
+  width: 48rpx;
+  height: 48rpx;
+}
+.material-file-name {
+  color: #111318;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.material-file button {
+  flex-shrink: 0;
+}
+.attachment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 20rpx;
+}
+.material-continue {
+  margin-top: 6rpx;
+}
 </style>

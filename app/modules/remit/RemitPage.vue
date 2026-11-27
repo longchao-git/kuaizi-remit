@@ -12,20 +12,9 @@
     v-else
     class="remit"
     :data-screen="screen"
-    :class="{ purple: screen === 1 || screen === 5, capturing: screen >= 14 && screen <= 16 }"
+    :class="{ purple: screen === 5, capturing: screen >= 14 && screen <= 16 }"
   >
-    <view v-if="screen === 1" class="splash" @tap="go(2)">
-      <view class="brand splash-brand">
-        <image class="splash-mark" src="/static/remit/logo-splash.svg" mode="aspectFit" />
-        <view><text class="brand-name">筷子闪汇</text><text class="brand-en">KUAIZI REMIT</text></view>
-      </view>
-      <view class="splash-caption">
-        <text>钱到得快，更到得稳</text>
-        <text class="subtle">欧洲至中国 · 合规跨境汇款服务</text>
-      </view>
-    </view>
-
-    <template v-else-if="screen === 5">
+    <template v-if="screen === 5">
       <view class="welcome-body">
         <button role="button" tabindex="0" class="close icon-control" aria-label="关闭优惠" @tap="closeOffer">
           <image class="round-icon" src="/static/remit/close.svg" mode="aspectFit" />
@@ -120,11 +109,18 @@
 
     <template v-else>
       <view class="top">
-        <button v-if="!isTab && screen > startupScreen" role="button" tabindex="0" class="back-hit" aria-label="返回" @tap="back">
-          <text v-if="screen >= 14 && screen <= 16">×</text>
+        <button v-if="!isTab && screen > 2" role="button" tabindex="0" class="back-hit" aria-label="返回" @tap="back">
+          <text v-if="screen >= 14 && screen <= 16" class="camera-dismiss">×</text>
+          <view v-else-if="screen === 22" class="preview-wallet-back" aria-hidden="true">
+            <image src="/static/remit/chevron.svg" mode="aspectFit" />
+          </view>
           <image v-else class="round-icon" src="/static/remit/back.svg" mode="aspectFit" />
         </button>
         <text>{{ currentTitle }}</text>
+        <button v-if="screen === 14 || screen === 15 || screen === 21" class="top-action" @tap="showPreviewHelp">
+          帮助
+        </button>
+        <button v-if="screen === 16" class="top-action" @tap="go(19)">模拟失败</button>
         <button
           role="button"
           tabindex="0"
@@ -155,7 +151,14 @@
             >
               <view class="spain-flag" /><text>+34</text>
             </button>
-            <input v-model="mobile" type="number" maxlength="9" placeholder="请输入手机号" aria-label="手机号" />
+            <input
+              v-model="mobile"
+              type="number"
+              maxlength="9"
+              placeholder="请输入手机号"
+              placeholder-class="remit-phone-placeholder"
+              aria-label="手机号"
+            />
           </view>
           <view class="agreement">
             <button
@@ -184,6 +187,7 @@
             {{ smsBusy ? "请稍候…" : "获取验证码" }}
           </button>
           <text v-if="demoEnabled" class="hint">演示流程 · 不会发送短信或创建账号</text>
+          <text v-else class="hint">仅用于账户登录与汇款状态通知</text>
           <button v-if="localLoginEnabled" class="text-button" @tap="localSessionOpen = true">使用测试账号</button>
         </view>
       </template>
@@ -219,7 +223,9 @@
             @tap="verifyCode"
           >
             {{ smsBusy ? "请稍候…" : "登录 / 注册" }}</button
-          ><text v-if="demoEnabled" class="hint accent" role="link" tabindex="0" @tap="go(36)">收不到验证码？ 联系客服</text></view
+          ><button class="inline-action accent otp-support" @tap="showCodeHelp">
+            {{ demoEnabled ? '收不到验证码？ 联系客服' : '收不到验证码？' }}
+          </button></view
         >
       </template>
       <template v-else-if="screen === 4">
@@ -228,7 +234,7 @@
           <text class="description">为保护您的资金和账户安全，请确认以下事项</text>
           <view class="card notice-card">
             <view v-for="notice in notices" :key="notice" class="notice"
-              ><view class="agreement-check is-checked" aria-hidden="true"><view class="agreement-tick" /></view>
+              ><view class="notice-mark" aria-hidden="true"><image src="/static/remit/notice-check.svg" mode="aspectFit" /></view>
               <text>{{ notice }}</text></view
             >
           </view>
@@ -239,8 +245,8 @@
         <view class="footer"
           ><button role="button" tabindex="0" class="primary" @tap="confirmNotices">
             {{ noticeOnboarding ? "同意并继续" : "返回" }}</button
-          ><button role="button" tabindex="0" class="secondary" @tap="showAgreement('rules')">
-            查看服务说明
+          ><button role="button" tabindex="0" class="secondary" @tap="showAgreement('terms')">
+            查看完整协议
           </button></view
         >
       </template>
@@ -290,7 +296,6 @@
         @open-identity="openIdentityResult"
         @start-identity-review="startIdentityReview"
         @preview-wechat-binding="previewWechatBinding"
-        @preview-apple-pay="previewApplePay"
         @legal="showAgreement"
       />
     </template>
@@ -307,18 +312,18 @@
         <image :src="tab.icon" mode="aspectFit" /><text>{{ tab.label }}</text>
       </button>
     </view>
-    <view v-if="countryOpen" class="sheet-overlay">
+    <view v-if="countryOpen" class="sheet-overlay country-overlay">
       <view class="sheet-scrim" aria-hidden="true" @tap="closeSheet" />
       <view v-if="countryOpen" class="sheet country-sheet" role="dialog" aria-modal="true" aria-label="选择国家">
         <view class="top">
           <button
             role="button"
             tabindex="0"
-            class="back-hit sheet-back"
+            class="back-hit country-dismiss"
             aria-label="关闭国家选择"
             @tap="closeSheet"
           >
-            ‹
+            <view class="country-dismiss-icon" aria-hidden="true" />
           </button>
           <text>选择国家</text>
         </view>
@@ -339,7 +344,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { onBackPress, onHide, onShow } from "@dcloudio/uni-app";
 import { AuthRepository } from "@/modules/auth/repository/AuthRepository";
 import { UnauthorizedError } from "@/request/http";
@@ -376,11 +381,7 @@ const tabs = [
   { screen: 37, label: "我的", icon: "/static/remit/tab-profile.svg" },
 ];
 
-const screen = ref(1);
-// #ifdef APP-PLUS
-screen.value = 2;
-// #endif
-const startupScreen = screen.value;
+const screen = ref(2);
 const localLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_LOCAL_LOGIN === 'true';
 const demoEnabled = import.meta.env.DEV
   ? import.meta.env.VITE_REMIT_LOCAL_SMS_LOGIN === "false"
@@ -476,7 +477,6 @@ const received = computed(() => formatAmount(quote.value.received));
 const maskedMobile = computed(() =>
   mobile.value ? mobile.value[0] + "•• ••• ••" + mobile.value.slice(-1) : "***",
 );
-let splashTimer: ReturnType<typeof setTimeout>;
 let smsTimer: ReturnType<typeof setInterval> | undefined;
 let resendAt = 0;
 
@@ -568,9 +568,7 @@ async function logoutRemit() {
 }
 
 function setScreen(next: number) {
-  clearTimeout(splashTimer);
   screen.value = next;
-  if (next === 1) scheduleSplash();
   void nextTick(() => uni.pageScrollTo({ scrollTop: 0, duration: 0 }));
 }
 
@@ -591,7 +589,7 @@ function back() {
     }
   }
   if (previous) orderId.value = previous.orderId;
-  setScreen(previous?.screen ?? (screen.value <= 2 ? startupScreen : 6));
+  setScreen(previous?.screen ?? (screen.value === 2 ? 2 : 6));
 }
 
 function closeSheet() {
@@ -729,19 +727,18 @@ function startIdentityReview() {
   go(17);
 }
 
-function previewApplePay() {
+function showPreviewHelp() {
   uni.showModal({
-    title: "Apple Pay 付款演示",
-    content: "本次应付 €" + formatAmount(quote.value.subtotal + getPreviewChannelFee(quote.value.cents, 1)),
-    confirmText: "模拟付款",
-    success: (result) => {
-      if (result.confirm && screen.value === 20 && payment.value === 1) advanceOrder(23, 1);
-    },
+    title: "演示说明",
+    content: screen.value === 21
+      ? "这里用于预览银行转账步骤。正式转账请使用付款服务提供的指引。"
+      : "这里用于预览证件拍摄步骤。正式核验请按身份验证页提示拍摄。",
+    showCancel: false,
   });
 }
 
 function advanceOrder(next: OrderStage, channel: number, attachment?: string) {
-  const paymentScreen = screen.value === 21 || screen.value === 22 || (screen.value === 20 && channel === 1);
+  const paymentScreen = screen.value === 21 || screen.value === 22;
   if (paymentScreen && next === 23 && !activeOrder.value) {
     const snapshot = quote.value;
     if (!snapshot.canStart) return;
@@ -862,6 +859,18 @@ async function verifyCode() {
   }
 }
 
+function showCodeHelp() {
+  if (demoEnabled) {
+    go(36);
+    return;
+  }
+  uni.showModal({
+    title: "收不到验证码？",
+    content: "请确认区号与手机号填写正确，检查手机信号和短信拦截设置。倒计时结束后可重新发送验证码。",
+    showCancel: false,
+  });
+}
+
 function showAgreement(kind: "terms" | "privacy" | "rules") {
   // #ifdef APP-PLUS || H5
   if (kind !== "rules") {
@@ -890,20 +899,11 @@ function confirmNotices() {
   else back();
 }
 
-function scheduleSplash() {
-  splashTimer = setTimeout(() => {
-    if (screen.value === 1) go(2);
-  }, 1400);
-}
-
 function closeLocalSession() {
   localSessionOpen.value = false;
   go(2);
 }
 
-onMounted(() => {
-  if (screen.value === 1 && !localSessionOpen.value) scheduleSplash();
-});
 onShow(refreshCountdown);
 onShow(() => {
   pageVisible.value = true;
@@ -920,12 +920,11 @@ onBackPress(() => {
     closeSheet();
     return true;
   }
-  if (screen.value <= startupScreen || screen.value === 6) return false;
+  if (screen.value === 2 || screen.value === 6) return false;
   back();
   return true;
 });
 onUnmounted(() => {
-  clearTimeout(splashTimer);
   if (smsTimer) clearInterval(smsTimer);
 });
 </script>

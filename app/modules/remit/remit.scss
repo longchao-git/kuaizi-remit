@@ -1,7 +1,10 @@
 .remit {
   --remit-accent: #5e51f1;
+  --remit-light-surface: #f5f5f5;
+  --remit-reference-surface: #f7f7fa;
+  --remit-status-inset: var(--status-bar-height, 0px);
   min-height: 100vh;
-  padding-top: var(--status-bar-height, 0px);
+  padding-top: var(--remit-status-inset);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -16,6 +19,44 @@
     "Microsoft YaHei",
     sans-serif;
 
+  &[data-screen="2"],
+  &[data-screen="3"],
+  &[data-screen="4"],
+  &[data-screen="6"],
+  &[data-screen="13"],
+  &[data-screen="21"],
+  &.capturing,
+  &.remit-home,
+  &.remit-figma-surface,
+  &.remit-reference-surface {
+    --remit-status-inset: max(88rpx, var(--status-bar-height, 0px), env(safe-area-inset-top, 0px));
+  }
+
+  &[data-screen="2"],
+  &[data-screen="3"],
+  &[data-screen="4"],
+  &[data-screen="6"],
+  &[data-screen="13"],
+  &[data-screen="21"],
+  &.remit-home,
+  &.remit-figma-surface {
+    background: var(--remit-light-surface);
+  }
+  &.remit-figma-surface .primary,
+  &.remit-figma-surface .secondary {
+    min-height: 100rpx;
+    border-radius: 30rpx;
+  }
+  &[data-screen="32"],
+  &[data-screen="33"],
+  &[data-screen="34"],
+  &[data-screen="35"],
+  &[data-screen="37"],
+  &[data-screen="38"],
+  &[data-screen="22"],
+  &.remit-reference-surface {
+    background: var(--remit-reference-surface);
+  }
   &.purple {
     background: var(--remit-accent);
     color: #fff;
@@ -25,9 +66,10 @@
     height: 100dvh;
     min-height: 0;
     overflow: hidden;
+    background: #f0f1f5;
   }
   &.capturing {
-    background: linear-gradient(145deg, #292b30, #111214);
+    background: #121318;
     color: #fff;
   }
   button {
@@ -220,9 +262,32 @@
     align-items: center;
     justify-content: center;
   }
-  &.capturing .back-hit {
+  .camera-dismiss {
+    display: grid;
+    place-items: center;
+    width: 60rpx;
+    height: 60rpx;
+    border-radius: 50%;
+    background: #33343a;
     color: #fff;
-    font-size: 48rpx;
+    font-size: 36rpx;
+    line-height: 1;
+  }
+  &[data-screen="22"] .top {
+    background: #fff;
+  }
+  .preview-wallet-back {
+    display: grid;
+    width: 68rpx;
+    height: 68rpx;
+    place-items: center;
+    border-radius: 50%;
+    background: #eef0f4;
+  }
+  .preview-wallet-back image {
+    width: 24rpx;
+    height: 24rpx;
+    transform: rotate(180deg);
   }
   .body {
     padding: 36rpx 40rpx 0;
@@ -240,8 +305,60 @@
     font-size: 26rpx;
     line-height: 1.5;
   }
-  .auth .brand {
-    margin: 28rpx 0 58rpx;
+  &[data-screen="2"] .auth {
+    padding-top: 32rpx;
+
+    .brand {
+      margin: 30rpx 0 56rpx;
+      gap: 20rpx;
+    }
+    .heading {
+      line-height: 64rpx;
+    }
+    .description {
+      line-height: 38rpx;
+    }
+    .phone,
+    .agreement {
+      margin-top: 56rpx;
+    }
+    .remit-phone-placeholder {
+      color: #999;
+    }
+  }
+  &[data-screen="2"] .footer {
+    padding-bottom: max(72rpx, calc(20rpx + env(safe-area-inset-bottom)));
+
+    .primary {
+      min-height: 100rpx;
+    }
+    .hint {
+      line-height: 32rpx;
+    }
+  }
+  &[data-screen="3"] .footer {
+    padding-bottom: max(60rpx, calc(24rpx + env(safe-area-inset-bottom)));
+
+    .primary {
+      min-height: 100rpx;
+      border-radius: 30rpx;
+    }
+
+    .otp-support {
+      min-height: 44rpx;
+      font-size: 22rpx;
+      line-height: 32rpx;
+    }
+  }
+  &[data-screen="4"] .footer {
+    gap: 20rpx;
+    padding-bottom: max(72rpx, calc(24rpx + env(safe-area-inset-bottom)));
+
+    .primary,
+    .secondary {
+      min-height: 100rpx;
+      border-radius: 30rpx;
+    }
   }
   .phone {
     margin-top: 54rpx;
@@ -333,7 +450,7 @@
   .otp-field {
     position: relative;
     display: flex;
-    gap: 14rpx;
+    gap: 16rpx;
     margin-top: 28rpx;
   }
   .otp-field input {
@@ -348,6 +465,8 @@
     align-items: center;
     justify-content: center;
     flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
     height: 108rpx;
     border: 3rpx solid transparent;
     border-radius: 24rpx;
@@ -370,56 +489,46 @@
     background: transparent;
   }
   .notices {
-    padding-top: 36rpx;
+    padding-top: 32rpx;
+
+    .description {
+      margin-top: 8rpx;
+      line-height: 38rpx;
+    }
   }
   .notice-card {
     margin-top: 20rpx;
-    padding: 27rpx 34rpx;
+    display: grid;
+    gap: 20rpx;
+    padding: 31rpx;
+    border: 1.5rpx solid #e2e2e7;
+  }
+  &[data-screen="4"] .secondary {
+    border: 1.5rpx solid #e2e2e7;
   }
   .notice {
     display: flex;
-    align-items: center;
-    gap: 10rpx;
-    padding: 8rpx 0;
+    align-items: flex-start;
+    min-height: 38rpx;
+    gap: 4rpx;
     font-size: 26rpx;
+    line-height: 38rpx;
   }
-  .legal-copy {
+  .notice-mark {
+    display: grid;
+    flex: 0 0 38rpx;
+    place-items: center;
+    width: 38rpx;
+    height: 38rpx;
+  }
+  .notice-mark image {
+    width: 29rpx;
+    height: 29rpx;
+  }
+  .notices .legal-copy {
+    margin-top: 20rpx;
     font-size: 24rpx;
-  }
-  .splash {
-    flex: 1;
-    min-height: 88vh;
-    position: relative;
-    text-align: center;
-  }
-  .splash-brand {
-    justify-content: center;
-    gap: 36rpx;
-    padding: 23vh 0 0 20rpx;
-    text-align: left;
-  }
-  .splash-mark {
-    width: 140rpx;
-    height: 140rpx;
-  }
-  .splash-brand .brand-name {
-    font-size: 52rpx;
-  }
-  .splash-brand .brand-en {
-    color: #fff;
-    font-size: 25rpx;
-  }
-  .splash-caption {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: calc(36rpx + env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: column;
-    gap: 22rpx;
-  }
-  .splash-caption .subtle {
-    font-size: 21rpx;
+    line-height: 35rpx;
   }
   .welcome-body {
     position: relative;
@@ -509,6 +618,78 @@
     padding: 30rpx 32rpx;
     border-radius: 38rpx;
     border: 0;
+  }
+  &[data-screen="6"],
+  &.remit-home {
+    .home-content {
+      padding-top: 32rpx;
+    }
+    .home-head {
+      min-height: 88rpx;
+      padding-bottom: 0;
+    }
+    .home-head .brand {
+      gap: 12rpx;
+      padding-inline-start: 4rpx;
+    }
+    .home-head + .promotion {
+      margin: 20rpx 0 0;
+    }
+    .promotion {
+      padding-inline: 24rpx;
+      border: 1rpx solid #ffe0c9;
+      border-radius: 15rpx;
+      background: #ffefe3;
+      color: #b9784e;
+      line-height: 1.45;
+    }
+    .quote-card {
+      margin-top: 20rpx;
+      padding: 24rpx;
+      border-radius: 36rpx;
+    }
+    .quote-card .quote-label {
+      color: #333;
+      font-weight: 500;
+    }
+    .quote-card .quote-label .muted {
+      color: #999;
+      font-size: 24rpx;
+    }
+    .quote-card .payout .muted {
+      color: #666;
+    }
+    .quote-card .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      width: 140rpx;
+      height: 40rpx;
+      padding: 6rpx 8rpx;
+      background: #eeeafd;
+      color: #5b4ff5;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .currency {
+      box-sizing: border-box;
+      margin-bottom: 24rpx;
+      padding-inline: 24rpx;
+      background: #f8f8f8;
+      color: #333;
+    }
+  }
+  &.remit-home .quote-footer {
+    background: var(--remit-light-surface);
+
+    .primary {
+      min-height: 88rpx;
+      border-radius: 26rpx;
+    }
+  }
+  &.remit-home .tabs {
+    padding-bottom: max(50rpx, calc(12rpx + env(safe-area-inset-bottom)));
   }
   .quote-label {
     font-weight: 600;
@@ -660,6 +841,9 @@
   .aio-overlay .sheet-scrim {
     background: rgba(0, 0, 0, 0.47);
   }
+  .country-overlay .sheet-scrim {
+    background: rgba(0, 0, 0, 0.7);
+  }
   .sheet {
     position: relative;
     width: 100%;
@@ -671,8 +855,36 @@
     overflow-y: auto;
   }
   .country-sheet {
-    min-height: 58%;
+    width: calc(100% - 64rpx);
+    height: 956rpx;
+    max-height: calc(100vh - var(--status-bar-height, 0px) - 30rpx);
+    margin: 0 32rpx max(30rpx, env(safe-area-inset-bottom));
+    border-radius: 40rpx;
     padding-top: 14rpx;
+  }
+  .country-dismiss {
+    inset: 0 0 0 auto;
+  }
+  .country-dismiss-icon {
+    position: relative;
+    width: 50rpx;
+    height: 50rpx;
+    border-radius: 50%;
+    background: #f5f5f5;
+  }
+  .country-dismiss-icon::before,
+  .country-dismiss-icon::after {
+    position: absolute;
+    inset: 15rpx auto auto 24rpx;
+    width: 2rpx;
+    height: 20rpx;
+    border-radius: 2rpx;
+    background: #666;
+    content: "";
+    transform: rotate(45deg);
+  }
+  .country-dismiss-icon::after {
+    transform: rotate(-45deg);
   }
   .country-search {
     display: block;
@@ -698,10 +910,6 @@
   }
   .country-choice .spain-flag {
     margin-left: 12rpx;
-  }
-  .sheet-back {
-    color: #626262;
-    font-size: 56rpx;
   }
   .aio-sheet {
     padding: 32rpx 34rpx calc(30rpx + env(safe-area-inset-bottom));

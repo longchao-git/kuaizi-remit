@@ -144,6 +144,7 @@ Route::middleware(['auth:sanctum', RequireMemberToken::class])->prefix('app')->g
     Route::post('/remittance/quotes', MemberQuoteController::class)->middleware('throttle:30,1,remit-quote-create:');
     Route::get('/remittance/announcement', RemittanceAnnouncementController::class);
     Route::get('/remittance/orders', [MemberOrderController::class, 'index']);
+    Route::get('/remittance/orders/summary', [MemberOrderController::class, 'summary']);
     Route::post('/remittance/orders', [MemberOrderController::class, 'checkout'])->middleware('throttle:10,1,remit-order-checkout:');
     Route::get('/remittance/payout-accounts', [MemberOrderController::class, 'accounts'])->middleware('throttle:30,1,remit-payout-accounts:');
     Route::get('/remittance/payout-account-drafts', [MemberPayoutAccountDraftController::class, 'index']);

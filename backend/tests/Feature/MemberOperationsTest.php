@@ -83,6 +83,10 @@ final class MemberOperationsTest extends TestCase
                 ->assertJsonPath('data.list.0.id', (string) $member->id)
                 ->assertJsonPath('data.list.0.email', $visibleEmail)
                 ->assertJsonPath('data.list.0.masked_phone', '+34 ••••• 000'.$index);
+            $this->getJson('/api/admin/remittance/members?keyword='.rawurlencode('+3460000000'.$index))
+                ->assertOk()->assertJsonPath('data.total', 1)
+                ->assertJsonPath('data.list.0.id', (string) $member->id)
+                ->assertJsonPath('data.list.0.masked_phone', '+34 ••••• 000'.$index);
             $this->assertSame($email, $member->fresh()->email);
         }
     }

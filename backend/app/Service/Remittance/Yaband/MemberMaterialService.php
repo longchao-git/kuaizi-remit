@@ -10,7 +10,7 @@ use App\Repository\Remittance\YabandMaterialRequestRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Repository\System\UserRepository;
 use App\Service\Notification\MemberNotificationService;
-use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
+use App\Service\Remittance\RemittanceChannels;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\DatabaseManager;
@@ -25,7 +25,7 @@ final class MemberMaterialService
         private YabandMaterialRequestRepository $tasks,
         private RemittanceOrderRepository $orders,
         private YabandRemitMemberRepository $members,
-        private YabandRemitClient $yaband,
+        private RemittanceChannels $channels,
         private UserRepository $users,
         private DatabaseManager $database,
         private MemberMaterialReminder $reminder,
@@ -90,8 +90,14 @@ final class MemberMaterialService
     {
         $member = (int) $input['member_id'];
         $order = isset($input['order_reference']) ? strtolower($input['order_reference']) : null;
-        if ($this->members->findFor($member)?->uid === null || ($order !== null && $this->orders->find($order, $member) === null)) {
+        $link = $this->members->findFor($member);
+        $linkedOrder = $order === null ? null : $this->orders->find($order, $member);
+        if ($link?->uid === null || ($order !== null && $linkedOrder === null)) {
             return Result::fail('找不到已关联雅本的会员或本人订单', 404);
+        }
+        $scope = $this->channels->storedScope($link->channel_scope);
+        if ($linkedOrder !== null && $this->channels->storedScope($linkedOrder->channel_scope) !== $scope) {
+            return Result::fail('补件订单与会员身份所属渠道不一致', 409);
         }
 
         $deadline = Carbon::createFromTimestampUTC($input['deadline_at']);
@@ -100,13 +106,15 @@ final class MemberMaterialService
         }
         $task = $this->tasks->register($input['question_id'], [
             'member_id' => $member, 'order_reference' => $order, 'instruction' => $input['instruction'], 'deadline_at' => $deadline,
+            'channel_scope' => $scope,
         ]);
         if ($task->member_id !== $member || $task->order_reference !== $order
-            || $task->instruction !== $input['instruction'] || $task->deadline_at->timestamp !== $deadline->timestamp) {
+            || $task->instruction !== $input['instruction'] || $task->deadline_at->timestamp !== $deadline->timestamp
+            || $this->channels->storedScope($task->channel_scope) !== $scope) {
             return Result::fail('雅本问题编号已用于其他补件任务', 409);
         }
 
-        $this->reminder->send($task, (string) config('yaband_remit.mid'));
+        $this->reminder->send($task, $scope === RemittanceChannels::LOCAL ? 'local' : (string) config('yaband_remit.mid'));
 
         return Result::success($this->present($task, true));
     }
@@ -142,7 +150,9 @@ final class MemberMaterialService
             if ($task->status !== '6001' || $task->deadline_at->lte(now())) {
                 return Result::fail('补件任务已关闭或过期', 409);
             }
-            if (! app()->bound(YabandRemitSigner::class)) {
+            try {
+                $channel = $this->channels->resolve($this->channels->storedScope($task->channel_scope));
+            } catch (YabandException) {
                 return Result::fail('雅本补件暂未开放', 503);
             }
             if ($task->submission_id === null) {
@@ -155,7 +165,7 @@ final class MemberMaterialService
                 ['doc_id' => $task->submission_id, 'media_type' => $media, 'attachment' => $encoded],
             ];
             try {
-                $response = $this->yaband->submitMaterials($task->submission_id, $task->question_id, $reply, $documents);
+                $response = $channel->submitMaterials($task->submission_id, $task->question_id, $reply, $documents);
             } catch (YabandException $error) {
                 $status = match ($error->upstreamCode) {
                     -1032 => '6003',

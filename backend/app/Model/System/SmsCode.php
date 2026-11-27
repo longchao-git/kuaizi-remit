@@ -3,6 +3,7 @@
 namespace App\Model\System;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -10,7 +11,7 @@ use Illuminate\Support\Carbon;
  * 短信验证码记录，每个手机号与场景只保留最新一条。
  *
  * @property int $id
- * @property string $mobile_e164
+ * @property string $mobile_lookup
  * @property string $scene
  * @property string $code_hash
  * @property int $attempts
@@ -20,7 +21,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
-#[Fillable(['mobile_e164', 'scene', 'code_hash', 'attempts', 'expires_at', 'sent_at', 'ip'])]
+#[Fillable(['mobile_lookup', 'scene', 'code_hash', 'attempts', 'expires_at', 'sent_at', 'ip'])]
+#[Hidden(['mobile_lookup', 'code_hash', 'ip'])]
 final class SmsCode extends Model
 {
     protected $table = 'sms_codes';

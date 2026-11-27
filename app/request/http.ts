@@ -1,6 +1,7 @@
 import { BASE_URL } from '@/config/api';
 import type { ApiResponse } from '@/shared/types/api';
 import { sessionService } from '@/shared/session/application/SessionService';
+import { deviceSignatureHeaders } from './device-signature';
 
 export interface HttpOptions {
   url: string;
@@ -83,16 +84,20 @@ function resolveResponse<T>(response: { data: ApiResponse<T>; statusCode?: numbe
 function http<T = unknown>(options: HttpOptions): Promise<T> {
   const { url, data, method = 'GET', header = {}, timeout = 60000, handleUnauthorized = true } = options;
   const token = sessionService.getToken();
+  const address = BASE_URL + url;
+  const requestData = method === 'POST' || method === 'PUT' ? JSON.stringify(data) : data;
 
   return new Promise((resolve, reject) => {
+    const proof = deviceSignatureHeaders(address, method, typeof requestData === 'string' ? requestData : '', token);
     uni.request({
-      url: BASE_URL + url,
+      url: address,
       method,
-      data: (method === 'POST' || method === 'PUT' ? JSON.stringify(data) : data) as string | AnyObject | ArrayBuffer | undefined,
+      data: requestData as string | AnyObject | ArrayBuffer | undefined,
       header: {
         'content-type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...header
+        ...header,
+        ...proof,
       },
       timeout,
       success: (res) => {

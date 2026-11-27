@@ -8,9 +8,7 @@ use App\Repository\Remittance\MemberClosureRepository;
 use App\Repository\Remittance\RemittanceOrderRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Repository\System\UserRepository;
-use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
 use App\Service\Remittance\Yaband\YabandException;
-use App\Service\Remittance\Yaband\YabandRemitClient;
 use App\Service\System\TestSmsLogin;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Database\DatabaseManager;
@@ -28,7 +26,7 @@ final class MemberClosureExecutionService
         private RemittanceOrderRepository $orders,
         private YabandRemitMemberRepository $links,
         private UserRepository $users,
-        private YabandRemitClient $client,
+        private RemittanceChannels $channels,
         private TestSmsLogin $testLogin,
         private DatabaseManager $database,
     ) {}
@@ -72,15 +70,20 @@ final class MemberClosureExecutionService
         }
         try {
             if ($request->execution_uid !== null) {
+                $link = $this->links->findFor((int) $request->member_id);
+                if ($link?->uid !== $request->execution_uid) {
+                    throw new YabandException('注销账号绑定不一致。');
+                }
+                $channel = $this->channels->resolve($this->channels->storedScope($link->channel_scope));
                 if ($verify) {
-                    $status = $this->client->queryKyc((string) Str::uuid(), $request->execution_uid);
+                    $status = $channel->queryKyc((string) Str::uuid(), $request->execution_uid);
                     if (($status['user_status_code'] ?? null) !== '1002') {
                         $this->requests->markUncertain($id, '尚未确认雅本账号已停用，请稍后核实或联系雅本处理');
 
                         return Result::fail('尚未确认雅本账号已停用，未重复发起注销', 409);
                     }
                 } else {
-                    $this->client->closeAccount($request->execution_request_id, $request->execution_uid);
+                    $channel->closeAccount($request->execution_request_id, $request->execution_uid);
                 }
             }
 
@@ -116,9 +119,14 @@ final class MemberClosureExecutionService
             if ($this->orders->hasUnsettled((int) $member->id)) {
                 return Result::fail('会员仍有未结清订单，请先处理汇款或退款', 409);
             }
-            $uid = $this->links->findFor((int) $member->id)?->uid;
-            if ($uid !== null && ! app()->bound(YabandRemitSigner::class)) {
-                return Result::fail('雅本注销通道尚未配置', 503);
+            $link = $this->links->findFor((int) $member->id);
+            $uid = $link?->uid;
+            if ($uid !== null) {
+                try {
+                    $this->channels->resolve($this->channels->storedScope($link->channel_scope));
+                } catch (YabandException) {
+                    return Result::fail('原账户注销通道暂不可用', 503);
+                }
             }
             if ($verify) {
                 if ($row->execution_request_id === null) {

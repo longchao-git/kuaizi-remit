@@ -1,0 +1,7 @@
+export function publicKey(): string {
+  return RemitSignerAndroid.publicKey()
+}
+
+export function sign(method: string, path: string, body: string, bearer: string): string {
+  return RemitSignerAndroid.sign(method, path, body, bearer)
+}

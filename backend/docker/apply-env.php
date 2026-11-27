@@ -44,4 +44,11 @@ foreach ($keys as $key) {
     }
 }
 
+// 仅首次生成本地配置时写入独立查询密钥，既有库不通过启动脚本换密钥。
+$phoneLookupKey = getenv('REMIT_PHONE_LOOKUP_KEY');
+if ($phoneLookupKey === false || $phoneLookupKey === '') {
+    $phoneLookupKey = base64_encode(random_bytes(32));
+}
+$contents = preg_replace_callback('/^REMIT_PHONE_LOOKUP_KEY=\r?$/m', static fn (): string => 'REMIT_PHONE_LOOKUP_KEY='.$phoneLookupKey, $contents, 1);
+
 file_put_contents($file, $contents);

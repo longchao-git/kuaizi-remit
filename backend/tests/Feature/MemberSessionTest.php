@@ -36,7 +36,11 @@ class MemberSessionTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.member', $first->json('data.member'));
 
-        $this->assertDatabaseHas('users', ['phone_e164' => $mobile['mobile']]);
+        $savedMember = User::query()->sole();
+        $this->assertSame($mobile['mobile'], $savedMember->phone_e164);
+        $this->assertStringNotContainsString($mobile['mobile'], $savedMember->getRawOriginal('phone_cipher'));
+        $this->assertArrayNotHasKey('phone_cipher', $savedMember->toArray());
+        $this->assertArrayNotHasKey('phone_lookup', $savedMember->toArray());
         $this->assertDatabaseCount('users', 1);
         $this->withToken($second->json('data.token'))->getJson('/api/app/auth/current')
             ->assertJsonPath('data', $first->json('data.member'));

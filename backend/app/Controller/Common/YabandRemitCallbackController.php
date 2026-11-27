@@ -2,10 +2,12 @@
 
 namespace App\Controller\Common;
 
+use App\Common\Result;
 use App\Service\Remittance\RemittanceOrderService;
 use App\Service\Remittance\Yaband\Contract\YabandRemitCallbackVerifier;
 use App\Service\Remittance\Yaband\MemberKycService;
 use App\Service\Remittance\Yaband\MemberMaterialNoticeService;
+use App\Service\Remittance\Yaband\YabandCallbackDelivery;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -13,9 +15,11 @@ use Symfony\Component\HttpFoundation\Response;
 final class YabandRemitCallbackController
 {
     /** 验签与归属核对通过后触发主动查询，失败保留非成功应答供上游重试。 */
-    public function __invoke(Request $request, string $event, RemittanceOrderService $orders, MemberKycService $kyc, MemberMaterialNoticeService $materials): Response
+    public function __invoke(Request $request, string $event, YabandCallbackDelivery $delivery, RemittanceOrderService $orders, MemberKycService $kyc, MemberMaterialNoticeService $materials): Response
     {
         abort_unless(app()->bound(YabandRemitCallbackVerifier::class), 503);
+        // 请求地址来自 Nginx 已校验的 REMOTE_ADDR，禁止自行信任公网转发头。
+        abort_unless($delivery->allowsSource($request->server('REMOTE_ADDR')), 403);
         abort_unless($request->isJson(), 415);
         $raw = $request->getContent();
         abort_if(strlen($raw) > 262144, 413);
@@ -27,26 +31,34 @@ final class YabandRemitCallbackController
         $data = array_key_exists('data', $payload) ? $payload['data'] : $payload;
         $mid = config('yaband_remit.mid');
         abort_unless(is_array($data) && is_string($mid) && $mid !== '' && ($data['mid'] ?? null) === $mid, 403);
+
+        $handle = fn (): Result => $this->dispatch($event, $data, $orders, $kyc, $materials);
+        $result = $event === 'transaction' ? $delivery->process($event, $payload['sign'], $handle) : $handle();
+        abort_if($result->isFail(), $result->getCode());
+
+        return response('ok', 200, ['Content-Type' => 'text/plain']);
+    }
+
+    private function dispatch(string $event, array $data, RemittanceOrderService $orders, MemberKycService $kyc, MemberMaterialNoticeService $materials): Result
+    {
         if ($event === 'transaction') {
             $order = $data['order_id'] ?? null;
             $trade = $data['trade_id'] ?? null;
             abort_unless(($data['type'] ?? null) === 'transaction' && is_string($order) && is_string($trade), 422);
-            $result = $orders->refreshNotified($order, $trade);
-        } elseif (($data['type'] ?? null) === 'question') {
-            $result = $materials->receive($data);
-        } else {
-            $user = $data['user'] ?? null;
-            if (is_string($user)) {
-                $user = json_decode($user, true, 16, JSON_BIGINT_AS_STRING);
-            }
-            $uid = is_array($user) ? ($user['uid'] ?? null) : null;
-            abort_unless(($data['type'] ?? null) === 'kyc' && (is_string($uid) || is_int($uid))
-                && $uid !== '' && strlen((string) $uid) <= 64, 422);
-            $result = $kyc->refreshNotified((string) $uid);
+
+            return $orders->refreshNotified($order, $trade);
         }
+        if (($data['type'] ?? null) === 'question') {
+            return $materials->receive($data);
+        }
+        $user = $data['user'] ?? null;
+        if (is_string($user)) {
+            $user = json_decode($user, true, 16, JSON_BIGINT_AS_STRING);
+        }
+        $uid = is_array($user) ? ($user['uid'] ?? null) : null;
+        abort_unless(($data['type'] ?? null) === 'kyc' && (is_string($uid) || is_int($uid))
+            && $uid !== '' && strlen((string) $uid) <= 64, 422);
 
-        abort_if($result->isFail(), $result->getCode());
-
-        return response('ok', 200, ['Content-Type' => 'text/plain']);
+        return $kyc->refreshNotified((string) $uid);
     }
 }

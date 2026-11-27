@@ -1,16 +1,41 @@
 <template>
   <view class="body kyc">
-    <text class="heading">{{ heading }}</text>
-    <text v-if="error" class="description offer" role="alert">{{ error }}</text>
-    <text v-if="status?.guidance" class="description">{{ status.guidance }}</text>
-    <view v-if="status?.registered" class="card status-card">
-      <view class="line"><text>身份验证</text><text>{{ idvLabel }}</text></view>
-      <view class="line"><text>身份资料</text><text>{{ profileLabel }}</text></view>
-      <view class="line"><text>汇款权限</text><text>{{ status.remittance_enabled ? '已开通' : '未开通' }}</text></view>
+    <view v-if="status" class="kyc-hero">
+      <view class="kyc-hero-icon" :class="`kyc-hero-${heroTone}`" aria-hidden="true">
+        <image v-if="heroTone === 'identity'" src="/static/remit/status-identity.svg" mode="aspectFit" />
+        <image v-else-if="heroTone === 'pending'" src="/static/remit/status-refresh.svg" mode="aspectFit" />
+        <view v-else-if="heroTone === 'success'" class="kyc-tick" />
+        <image v-else src="/static/remit/status-warning.svg" mode="aspectFit" />
+      </view>
+      <text class="heading">{{ heading }}</text>
+      <text v-if="status.simulated" class="description">模拟认证，请使用测试资料。</text>
+      <text v-if="status.guidance" class="description">{{ status.guidance }}</text>
+      <text v-else-if="showIntroduction" class="description">请准备有效证件，并确认由本人完成验证。</text>
+      <text v-else-if="heroTone === 'pending'" class="description">资料审核期间可以离开此页面。</text>
+      <text v-else-if="heroTone === 'success'" class="description">{{ status.remittance_enabled ? '你现在可以继续汇款。' : '可在下方查看汇款权限。' }}</text>
+      <text v-else-if="heroTone === 'failure' && status.can_start_idv" class="description">请检查证件资料后重新验证。</text>
     </view>
-    <button v-if="status && (!status.registered || status.can_start_idv)" class="primary" :disabled="busy" @tap="start">
-      前往身份验证
-    </button>
+    <text v-if="error" class="description offer" role="alert">{{ error }}</text>
+    <template v-if="showIntroduction">
+      <view v-for="(step, index) in introductionSteps" :key="step.title" class="card kyc-step">
+        <text class="kyc-step-number">{{ index + 1 }}</text>
+        <view><text class="block">{{ step.title }}</text><text class="kyc-step-detail">{{ step.detail }}</text></view>
+      </view>
+      <text class="kyc-notice">认证资料用于身份核验，请按验证页提示提交。</text>
+    </template>
+    <view v-else-if="status?.registered && !showRetryTips" class="card status-card">
+      <view class="line"><text>身份验证</text><text :class="{ 'status-ok': status.kyc_passed }">{{ idvLabel }}</text></view>
+      <view class="line"><text>身份资料</text><text :class="{ 'status-ok': status.profile_status_code === '3002' }">{{ profileLabel }}</text></view>
+      <view class="line"><text>汇款权限</text><text :class="{ 'status-ok': status.remittance_enabled }">{{ status.remittance_enabled ? '已开通' : '未开通' }}</text></view>
+    </view>
+    <text v-if="heroTone === 'pending'" class="kyc-notice">你可以随时回来查询认证进度。</text>
+    <view v-if="showRetryTips" class="card kyc-retry">
+      <text class="kyc-retry-title">重新拍摄时请注意</text>
+      <view v-for="(tip, index) in retryTips" :key="tip" class="kyc-retry-tip">
+        <text class="kyc-retry-number">{{ index + 1 }}</text>
+        <text>{{ tip }}</text>
+      </view>
+    </view>
     <button v-if="url" class="inline-action accent" :disabled="busy" @tap="launch">打开雅本验证页</button>
     <button v-if="canEditProfile"
       class="inline-action accent" :disabled="busy" @tap="profileOpen = !profileOpen">
@@ -43,7 +68,20 @@
       <input v-model="profile.address.city" placeholder="城市" maxlength="64" :disabled="busy" />
       <button class="primary" :disabled="busy" @tap="submitProfile">提交身份资料</button>
     </view>
-    <button class="inline-action accent" :disabled="busy" @tap="refresh">{{ busy ? '处理中…' : '查询认证进度' }}</button>
+    <button v-if="heroTone === 'success' && status?.remittance_enabled"
+      class="inline-action accent kyc-status-refresh" :disabled="busy" @tap="refresh">
+      {{ busy ? '处理中…' : '查询认证进度' }}
+    </button>
+    <view class="kyc-actions" :class="{ 'is-approved': heroTone === 'success' && status?.remittance_enabled }">
+      <button v-if="status && (!status.registered || status.can_start_idv)" class="primary" :disabled="busy" @tap="start">
+        {{ heroTone === 'failure' ? '重新认证' : '开始认证' }}
+      </button>
+      <button v-else-if="heroTone === 'success' && status?.remittance_enabled" class="primary" @tap="$emit('home')">继续汇款</button>
+      <button v-else-if="heroTone === 'pending'" class="secondary kyc-return" @tap="$emit('home')">返回首页</button>
+      <button v-if="heroTone === 'pending' || heroTone === 'failure'" class="secondary" @tap="$emit('support')">联系客服</button>
+      <button v-if="heroTone !== 'success' || !status?.remittance_enabled"
+        class="inline-action accent" :disabled="busy" @tap="refresh">{{ busy ? '处理中…' : '查询认证进度' }}</button>
+    </view>
   </view>
 </template>
 
@@ -52,6 +90,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import request, { UnauthorizedError, ValidationError } from '@/request/http';
 
 interface KycStatus {
+  simulated?: boolean;
   registered: boolean;
   can_start_idv?: boolean;
   can_submit_profile?: boolean;
@@ -65,7 +104,7 @@ interface KycStatus {
 }
 
 const props = defineProps<{ pageVisible: boolean }>();
-const emit = defineEmits<{ expired: [] }>();
+const emit = defineEmits<{ expired: []; home: []; support: [] }>();
 const status = ref<KycStatus>();
 const url = ref('');
 const busy = ref(false);
@@ -105,13 +144,38 @@ const idvLabels: Record<string, string> = {
   '2001': '待验证', '2002': '待重新验证', '2003': '验证中', '2004': '资料已提交', '2005': '需重新提交',
   '2006': '身份验证通过', '2007': '验证未通过', '2008': '验证已过期', '2009': '验证未完成', '2010': '人工审核中',
 };
-const heading = computed(() => status.value ? (kycLabels[status.value.kyc_status_code ?? ''] ?? '身份认证') : '身份认证');
+const heading = computed(() => {
+  if (status.value?.simulated && status.value.can_submit_profile) return '待提交资料';
+  if (showIntroduction.value) return '完成认证即可汇款';
+  if (heroTone.value === 'pending') return '资料审核中';
+  if (heroTone.value === 'success') return '认证已通过';
+  if (status.value?.kyc_status_code === '5005') return '暂时无法完成认证';
+  return kycLabels[status.value?.kyc_status_code ?? ''] ?? '身份认证';
+});
+const heroTone = computed(() => {
+  switch (status.value?.kyc_status_code) {
+    case '5002': return 'pending';
+    case '5004': return 'success';
+    case '5003':
+    case '5005': return 'failure';
+    default: return 'identity';
+  }
+});
 const idvLabel = computed(() => idvLabels[status.value?.idv_status_code ?? ''] ?? '待查询');
 const profileLabels: Record<string, string> = { '3001': '待提交', '3002': '已批准', '3003': '未获批准', '3004': '需更新资料' };
 const profileLabel = computed(() => profileLabels[status.value?.profile_status_code ?? ''] ?? '待查询');
 const canEditProfile = computed(() => Boolean(
   status.value?.can_submit_profile && !status.value.kyc_passed && status.value.profile_status_code !== '3002',
 ));
+const showIntroduction = computed(() => heroTone.value === 'identity' && !canEditProfile.value
+  && Boolean(status.value && (!status.value.registered || status.value.can_start_idv)));
+const showRetryTips = computed(() => heroTone.value === 'failure' && status.value?.can_start_idv);
+const introductionSteps = [
+  { title: '拍摄有效证件', detail: '按验证页提示选择证件和拍摄方式' },
+  { title: '完成人脸识别', detail: '确认由本人操作' },
+  { title: '等待系统审核', detail: '审核结果可在此页面查询' },
+];
+const retryTips = ['在光线均匀的环境中拍摄', '完整露出证件四角，避免遮挡', '避开反光，确保证件文字清晰'];
 
 async function run(action: () => Promise<void>) {
   if (!active || busy.value) return;
@@ -138,9 +202,14 @@ async function run(action: () => Promise<void>) {
 
 function start() {
   void run(async () => {
-    const session = await request.post<{ url: string }>('app/kyc/idv', {}, options);
+    const session = await request.post<{ url?: string; simulated?: boolean }>('app/kyc/idv', {}, options);
     if (!active) return;
-    if (!session.url.startsWith('https://')) throw new Error('未获取到安全的验证地址');
+    if (session.simulated) {
+      url.value = '';
+      refreshQueued = true;
+      return;
+    }
+    if (!session.url?.startsWith('https://')) throw new Error('未获取到安全的验证地址');
     url.value = session.url;
   });
 }
@@ -260,10 +329,119 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.kyc { display: grid; gap: 20rpx; }
+.kyc { display: flex; flex: 1; flex-direction: column; gap: 20rpx; padding-inline: 32rpx; }
+.kyc-hero {
+  display: grid;
+  justify-items: center;
+  gap: 16rpx;
+  padding: 40rpx 0 16rpx;
+  text-align: center;
+}
+.kyc-hero .description {
+  margin-top: 0;
+}
+.kyc-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 240rpx;
+  height: 240rpx;
+  margin-bottom: 16rpx;
+  border-radius: 78rpx;
+  background: #ece9ff;
+}
+.kyc-hero-icon image {
+  width: 110rpx;
+  height: 110rpx;
+}
+.kyc-hero-success {
+  color: #47946d;
+  background: #daf3e6;
+}
+.kyc-hero-failure {
+  background: #ffd7e0;
+}
+.kyc-tick {
+  box-sizing: border-box;
+  width: 36rpx;
+  height: 72rpx;
+  margin-top: -18rpx;
+  border: solid currentColor;
+  border-width: 0 10rpx 10rpx 0;
+  border-radius: 5rpx;
+  transform: rotate(40deg);
+}
+.kyc-step {
+  display: flex;
+  min-height: 128rpx;
+  align-items: center;
+  gap: 24rpx;
+  padding: 16rpx 22rpx;
+}
+.kyc-step-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 82rpx;
+  height: 82rpx;
+  border-radius: 50%;
+  background: #eeebff;
+  color: var(--remit-accent);
+  font-size: 38rpx;
+  font-weight: 700;
+}
+.kyc-step-detail {
+  display: block;
+  margin-top: 8rpx;
+  color: #777;
+  font-size: 23rpx;
+}
+.kyc-notice {
+  padding: 22rpx;
+  border-radius: 24rpx;
+  background: #edf8f2;
+  color: #367d5c;
+  font-size: 24rpx;
+}
+.kyc-retry {
+  display: grid;
+  gap: 16rpx;
+  padding: 28rpx 32rpx;
+}
+.kyc-retry-title { font-weight: 600; }
+.kyc-retry-tip {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  color: #666;
+  font-size: 26rpx;
+}
+.kyc-retry-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 37rpx;
+  height: 37rpx;
+  border-radius: 50%;
+  background: var(--remit-accent);
+  color: #fff;
+  font-size: 23rpx;
+}
+.status-ok { color: #367d5c; }
+.kyc-actions {
+  display: grid;
+  gap: 18rpx;
+  margin-top: auto;
+  padding: 32rpx 0 max(50rpx, calc(16rpx + env(safe-area-inset-bottom)));
+}
+.kyc-actions.is-approved { padding-bottom: max(70rpx, calc(24rpx + env(safe-area-inset-bottom))); }
+.kyc-actions.is-approved .primary { min-height: 110rpx; }
+.kyc-status-refresh { align-self: flex-end; }
+.kyc-actions .kyc-return {
+  color: var(--remit-accent);
+  background: #eeebff;
+  border-color: transparent;
+}
 .field-errors { display: grid; gap: 10rpx; color: #b23b3b; font-size: 26rpx; }
 .profile-option.invalid { border-color: #b23b3b; }
-.status-card { display: grid; gap: 14rpx; padding: 24rpx; }
+.status-card { display: grid; gap: 28rpx; padding: 32rpx; }
 .profile-form input, .profile-option {
   min-height: 74rpx;
   box-sizing: border-box;

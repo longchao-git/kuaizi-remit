@@ -51,6 +51,10 @@ uni.scss
 
 App 和小程序仍用 HBuilderX 打开 `app` 目录运行，交付前至少完成一次目标平台运行和发行构建。
 
+本地模拟后端使用独立 SQLite 和合成账号。客户端的模拟报价明确提示不会扣款，模拟认证直接刷新认证状态，原有真实认证仍使用雅本 HTTPS 页面。后端配置见 [渠道和接口安全](../backend/README.md#雅本汇款)。
+
+Android/iOS 的设备签名模块由 HBuilderX 原生编译。Android 使用 AndroidKeyStore，iOS 使用 Secure Enclave，两端都按 P-256 签署高风险写入请求。`VITE_REMIT_DEVICE_SIGNING=true` 后登录时同步设备公钥，旧包及现有会话不具备签名能力。与后端的 `REMIT_REQUIRE_DEVICE_SIGNATURES` 开关协调，先用可签名的测试包验证登录、签名请求、退出与重新登录，再启用强制校验。
+
 ### 当前测试与保密要求（2026-11-21）
 
 筷子闪汇当前只做 Android、iOS App；下文保留的 H5/小程序模板说明不代表新增交付目标。当前仅向指定测试人员私下分发，不公开上架 Apple App Store 或 Google Play，不开放公开测试、预注册或公开邀请链接。正式公开发布须由项目负责人另行确认。
@@ -61,7 +65,7 @@ iOS 可使用 TestFlight 指定邮箱邀请测试；Android 可使用签名 APK 
 
 ### App 原生启动图
 
-资产位于 `native-splash/`。Android 使用 480×762、720×1242、1080×1882 三档 `.9.png`，iOS 使用包含 `LaunchScreen.storyboard` 和两档 PNG 的 `LaunchScreen.zip`。`manifest.json` 已按项目内相对路径配置。Android 和 iOS 安装包从原生启动界面直接进入业务入口，H5 演示保留品牌启动页。
+资产位于 `native-splash/`。Android 使用 480×762、720×1242、1080×1882 三档 `.9.png`，iOS 使用包含 `LaunchScreen.storyboard` 和两档 PNG 的 `LaunchScreen.zip`。`manifest.json` 使用项目内相对路径。iOS 等比例完整呈现启动图，四周由同色背景填充。Android 和 iOS 安装包从原生启动图直接进入业务入口，H5 直接进入业务入口。
 
 使用 HBuilderX 的「App 启动界面配置」核对路径并打包安装，再分别冷启动验证。普通运行基座的启动图由基座决定。参见 [DCloud 启动界面配置](https://uniapp.dcloud.net.cn/tutorial/app-splashscreen.html)。
 

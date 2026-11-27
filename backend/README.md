@@ -12,13 +12,15 @@ composer install
 if (-not (Test-Path .env)) {
     Copy-Item .env.example .env
     php artisan key:generate --no-interaction
+    $phoneLookupKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    (Get-Content .env) -replace '^REMIT_PHONE_LOOKUP_KEY=$', "REMIT_PHONE_LOOKUP_KEY=$phoneLookupKey" | Set-Content .env
 }
 if (-not (Test-Path database/database.sqlite)) { New-Item database/database.sqlite -ItemType File | Out-Null }
 php artisan migrate
 php artisan serve --host=127.0.0.1 --port=8688
 ```
 
-已有 `.env` 时沿用已有应用密钥和数据库配置。只在首次创建 `.env` 后运行 `key:generate`，迁移前检查 `DB_CONNECTION` 和 `DB_DATABASE` 指向本地开发库。
+已有 `.env` 时沿用已有应用密钥和数据库配置。只在首次创建 `.env` 后运行 `key:generate`。首次执行手机号加密迁移前，给既有 `.env` 补独立的 `REMIT_PHONE_LOOKUP_KEY` 随机值，格式为 32 字节的 Base64，之后由私有配置保管。迁移前检查 `DB_CONNECTION` 和 `DB_DATABASE` 指向预期数据库。
 
 `GET /api/health` 可用于检查 API 进程及 `code/msg/data` 响应格式。当前健康检查不依赖数据库。`GET /up` 是 Laravel 自带的启动检查。
 
@@ -80,6 +82,16 @@ docker exec -it kuaizi-remit-api php artisan remit:create-admin admin@kuaizi.loc
 客户端通过 `POST /api/broadcasting/auth` 申请私有频道签名，使用自己的 Bearer 令牌。`REVERB_APP_KEY` 用于连接，`REVERB_APP_SECRET` 留在服务端。客服和站内消息通过 HTTP 保存，通过 Reverb 通知客户端刷新或补收。
 
 ## 雅本汇款
+
+`REMIT_CHANNEL=yaband` 使用雅本适配器。`YABAND_REMIT_ENVIRONMENT` 选 `sandbox` 或 `production`，配合各自的 URL、MID 和密钥。已有报价、订单、认证与补件在迁移时按原有环境、雅本地址和 MID 固定归属。迁移时保留原配置。切换后新报价使用新配置，涉及旧渠道的操作需连接原环境和商户；重试不串渠道。原身份和新环境独立注册，正式环境使用独立数据库。
+
+`REMIT_CHANNEL=local` 仅支持 `APP_ENV=local` 的隔离 SQLite。配置 `REMIT_LOCAL_RATE_TEN_THOUSANDTHS`，用合成账号和正常费率规则在 App 中走模拟认证、下单及查单。`REMIT_LOCAL_SCENARIO` 控制下一次查单返回 `pending`、`paid`、`delivered`、`failed`、`refunding` 或 `refunded`；从配置更改场景后重新加载服务。模拟支付只生成本地订单编号，App 查单可看到模拟资金状态。按设计使用新订单测试失败分支，已确认的到账或退款状态受到回退保护。
+
+雅本回调从可信代理提供的 `REMOTE_ADDR` 读取实际来源。`YABAND_REMIT_CALLBACK_SOURCE_IPS` 接受逗号分隔的 IP/CIDR，正式模式必填，沙箱可通过 `YABAND_REMIT_CALLBACK_IP_REQUIRED=true` 强制。交易回调验签后主动查询，只有业务查询和写入成功才缓存签名摘要 15 分钟。相同通知重发返回 `ok`，首次处理失败可重试；缓存外仍由资金状态检查和幂等保证一致性。通知格式、来源 IP 及有效重试需用上游实际报文联调。真实身份及资金启用前核对回源 HTTPS。
+
+高风险会员 API 设备签名使用 P-256，公钥在登录校验通过后绑定本次 Sanctum Token。配置 `REMIT_REQUIRE_DEVICE_SIGNATURES=true` 后要求 `/app/kyc/idv`、`/app/kyc/profile`、`/app/remittance/orders` 的 POST 和收款资料草稿的 PUT 请求附签名，根路径和旧 `/api` 路径均受保护。签名包含请求方法、实际路径、正文 SHA-256、会话 Token SHA-256、时间和随机值。服务器拒绝过期、篡改和重复使用的签名。要求共享的数据库或 Redis 缓存，确保多实例也能原子占用随机值。
+
+升级已有服务器应在维护窗口暂停旧版 API 和写入任务，备份后迁移，再启动新版。手机号明文字段在备份和密文迁移后移除，手机号核对改为完整 `+34` 号码。查询密钥与库绑定，配置异常会拒绝操作。更换查询密钥需受控重建索引，历史备份另按敏感数据管理。设备签名开关在新包验证后与 App 配置协调开启，旧会话需重新登录注册公钥。
 
 `YABAND_REMIT_BASE_URL`、`YABAND_REMIT_MID`、`YABAND_REMIT_PASSWORD` 使用雅本开通的汇款 API 配置。认证入口另需 `YABAND_REMIT_KYC_REDIRECT_URL`、`YABAND_REMIT_KYC_NOTIFY_URL` 和 `YABAND_REMIT_EXTERNAL_UID_PREFIX`。同一项目环境使用固定前缀，开户重试复用本地已保存的请求编号。正式启用需要按汇款项目签名规范注册 `YabandRemitSigner` 实现。接口范围和沙箱待提供项见 [汇款对接说明](../docs/business/remit-integration.md#laravel-与雅本接口对应)。
 

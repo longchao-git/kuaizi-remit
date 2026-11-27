@@ -1,0 +1,8 @@
+{
+  "id": "remit-device-signing",
+  "displayName": "筷子闪汇设备签名",
+  "version": "1.0.0",
+  "description": "使用系统密钥库为已验证的会员会话签署高风险请求",
+  "engines": { "HBuilderX": "^4.25" },
+  "uni_modules": {}
+}

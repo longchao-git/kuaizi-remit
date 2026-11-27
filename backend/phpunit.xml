@@ -21,6 +21,7 @@
         <!-- force="true"：容器/CI 已注入 DB_* 等变量时，测试也必须覆盖为内存库，避免误清开发库。
              server 段落同时覆盖 $_SERVER，Laravel 的 env() 优先读取它。 -->
         <env name="APP_ENV" value="testing" force="true"/>
+        <env name="REMIT_PHONE_LOOKUP_KEY" value="dGVzdC1vbmx5LXBvcnRhYmxlLWxvb2t1cC1rZXktMSE=" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4" force="true"/>
         <env name="BROADCAST_CONNECTION" value="reverb" force="true"/>

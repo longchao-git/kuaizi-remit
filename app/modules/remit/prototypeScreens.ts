@@ -17,6 +17,8 @@ export interface PrototypeScreen {
   mode?: "camera" | "upload" | "chat";
 }
 
+export const transferIban = "ES•• •••• •••• 2198";
+
 export const screens: Record<number, PrototypeScreen> = {
   7: {
     title: "AIO 专人服务",
@@ -68,8 +70,9 @@ export const screens: Record<number, PrototypeScreen> = {
   13: {
     title: "选择证件",
     heading: "请选择正在使用的有效证件",
+    description: "证件必须在有效期内，且信息清晰完整。",
     options: [
-      { label: "西班牙居留卡 TIE", to: 14 },
+      { label: "本地居留卡 TIE", to: 14 },
       { label: "护照", to: 14 },
       { label: "欧盟身份证", to: 14 },
     ],
@@ -77,14 +80,14 @@ export const screens: Record<number, PrototypeScreen> = {
   },
   14: {
     title: "拍摄证件正面",
-    heading: "请将证件正面放入框内",
-    description: "保持光线充足，确保证件四角完整。",
+    heading: "请将证件完整放入框内",
+    description: "证件正面 · 避免反光并保持稳定",
     mode: "camera",
   },
   15: {
     title: "拍摄证件背面",
-    heading: "请将证件背面放入框内",
-    description: "避免反光和遮挡，确保证件信息清晰。",
+    heading: "请将证件完整放入框内",
+    description: "证件背面 · 四角必须完整可见",
     mode: "camera",
   },
   16: {
@@ -94,7 +97,6 @@ export const screens: Record<number, PrototypeScreen> = {
     mode: "camera",
     actions: [
       { label: "开始识别", to: 17 },
-      { label: "查看失败状态", to: 19 },
     ],
   },
   17: {
@@ -143,12 +145,12 @@ export const screens: Record<number, PrototypeScreen> = {
   },
   21: {
     title: "银行转账付款",
-    description: "请在银行 App 使用本人账户转账，并填写订单附言。",
+    description: "请准确填写付款附言，以便转账后核对订单。",
     rows: [
-      ["收款人", "AIO PAYMENTS EUROPE"],
-      ["IBAN", "ES91 •••• •••• 2198"],
-      ["银行", "BBVA"],
-      ["转账附言", "KZ829104"],
+      ["收款人名称", "示例收款机构"],
+      ["IBAN", transferIban],
+      ["银行", "示例银行"],
+      ["付款附言", ""],
     ],
     actions: [{ label: "我已完成转账", to: 23 }],
   },

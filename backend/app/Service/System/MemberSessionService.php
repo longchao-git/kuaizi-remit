@@ -39,7 +39,7 @@ final class MemberSessionService
     }
 
     /** 验证唯一指定的联调账号，返回短期 App 令牌和资料。 */
-    public function loginLocal(string $email, string $password): Result
+    public function loginLocal(string $email, string $password, ?string $devicePublicKey = null): Result
     {
         $configuredEmail = $this->localLoginEmail();
         $member = $configuredEmail !== null && strtolower($email) === $configuredEmail
@@ -52,7 +52,7 @@ final class MemberSessionService
             return Result::fail('账号或密码错误', ErrorCode::INVALID_CREDENTIALS);
         }
 
-        return $this->start($member, self::LOCAL_TOKEN_NAME);
+        return $this->start($member, self::LOCAL_TOKEN_NAME, $devicePublicKey);
     }
 
     public function localSmsEnabled(): bool
@@ -79,13 +79,13 @@ final class MemberSessionService
     }
 
     /** 校验短信验证码后登录，首次登录自动创建会员。 */
-    public function loginSms(string $mobile, string $code): Result
+    public function loginSms(string $mobile, string $code, ?string $devicePublicKey = null): Result
     {
         if (! $this->allowsSmsMobile($mobile) || ! $this->codes->verify($mobile, $code)) {
             return Result::fail('验证码错误', ErrorCode::INVALID_CREDENTIALS);
         }
 
-        return $this->database->transaction(function () use ($mobile): Result {
+        return $this->database->transaction(function () use ($mobile, $devicePublicKey): Result {
             $test = $this->testLogin->allows($mobile);
             $member = $test
                 ? $this->users->findOrRegisterTestMobile($mobile, $this->testLogin->memberEmail($mobile))
@@ -94,19 +94,22 @@ final class MemberSessionService
                 return Result::fail('无法登录此账号', ErrorCode::INVALID_CREDENTIALS);
             }
 
-            return $this->start($member, $test ? self::TEST_SMS_TOKEN_NAME : self::LOCAL_SMS_TOKEN_NAME);
+            return $this->start($member, $test ? self::TEST_SMS_TOKEN_NAME : self::LOCAL_SMS_TOKEN_NAME, $devicePublicKey);
         }, attempts: 3);
     }
 
     /** 在会员行锁内重查停用状态并发令牌，与注销收尾串行化。 */
-    private function start(User $member, string $name): Result
+    private function start(User $member, string $name, ?string $devicePublicKey): Result
     {
-        return $this->database->transaction(function () use ($member, $name): Result {
+        return $this->database->transaction(function () use ($member, $name, $devicePublicKey): Result {
             $current = $this->users->lockMember((int) $member->id);
             if ($current === null || $current->member_closed_at !== null) {
                 return Result::fail('账号已注销，无法登录', 403);
             }
             $token = $this->users->startMemberSession($current, $name);
+            if ($devicePublicKey !== null) {
+                $token->accessToken->forceFill(['signing_public_key' => $devicePublicKey])->saveOrFail();
+            }
 
             return Result::success(['token' => $token->plainTextToken, 'member' => $this->profile($current)]);
         });

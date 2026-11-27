@@ -1,26 +1,59 @@
 <template>
-  <view v-if="content.mode === 'camera'" class="camera">
+  <view v-if="content.mode === 'camera'" class="camera" :class="{ 'liveness-camera': screen === 16 }">
     <view class="scan-frame" :class="{ oval: screen === 16 }">
-      <text v-if="screen === 16" class="face">😊</text>
-      <view v-else class="sample-document" :class="{ reverse: screen === 15 }"> <view /><view /><view /> </view>
+      <view v-if="screen === 16" class="face-outline" aria-hidden="true" />
+      <view v-else class="sample-document" :class="{ reverse: screen === 15 }" aria-hidden="true">
+        <view /><view /><view />
+      </view>
     </view>
-    <text class="block">{{ content.heading }}</text>
-    <text class="camera-hint block">{{ content.description }} · 核验界面预览</text>
-    <button
-      role="button"
-      tabindex="0"
-      v-if="screen < 16"
-      class="shutter"
-      aria-label="拍摄证件"
-      @tap="captureDocument"
-    />
+    <view v-if="screen === 16" class="line camera-status">
+      <text>光线状态示意</text>
+      <text>演示就绪</text>
+    </view>
+    <template v-else>
+      <text class="block">{{ content.heading }}</text>
+      <text class="camera-hint block">{{ content.description }}</text>
+      <button class="shutter" aria-label="拍摄证件" @tap="captureDocument">
+        <view aria-hidden="true" />
+      </button>
+      <text class="camera-caption">核验界面预览</text>
+    </template>
+  </view>
+
+  <view v-else-if="screen === 21" class="transfer-preview">
+    <text class="callout warning transfer-warning">转账界面演示，请勿向示例账户转账。</text>
+    <view class="card transfer-card">
+      <view class="line transfer-amount">
+        <text class="muted">转账金额</text>
+        <text class="value">{{ euro(quote.subtotal) }}</text>
+      </view>
+      <view v-for="[label, value] in details" :key="label" class="line">
+        <text class="muted">{{ label }}</text>
+        <text class="value" :class="{ accent: label === '付款附言' }">{{ rowValue(label, value) }}</text>
+      </view>
+    </view>
+    <text class="transfer-tip">{{ content.description }}</text>
+    <view class="transfer-tools">
+      <button class="text-link" @tap="copyTransferText(transferIban)">复制 IBAN 示例</button>
+      <button class="text-link" @tap="copyTransferText(orderId)">复制付款附言</button>
+    </view>
   </view>
 
   <view
     v-else
     class="body prototype"
-    :class="{ 'tab-body': screen === 32 || screen === 37, 'bank-form': screen === 9, 'chat-body': content.mode === 'chat' }"
+    :class="{
+      'tab-body': screen === 32 || screen === 37,
+      'bank-form': screen === 9,
+      'chat-body': content.mode === 'chat',
+      'document-preview': screen === 13,
+      'wallet-preview': screen === 22 && payment === 1,
+    }"
   >
+    <view v-if="screen === 13" class="document-progress" aria-label="证件核验第 1 步，共 3 步">
+      <view class="is-current" /><view /><view />
+    </view>
+
     <view
       v-if="status || screen === 24 || screen === 29 || screen === 33"
       class="status-hero"
@@ -42,6 +75,7 @@
       <text v-if="screen === 22" class="heading">本次将支付 {{ euro(paymentTotal) }}</text>
       <text v-else-if="screen === 31" class="heading">{{ euro(paymentTotal) }} 已原路退回</text>
       <text v-else-if="content.heading" class="heading">{{ content.heading }}</text>
+      <text v-if="screen === 22" class="description">人民币到账金额预览为 ¥{{ received }}</text>
       <text v-if="content.description" class="description">{{ content.description }}</text>
     </view>
     <template v-else-if="screen !== 35">
@@ -50,8 +84,6 @@
       <text v-else-if="screen === 28" class="description">可选择 {{ attachmentFormats }} 格式的资料。</text>
       <text v-else-if="content.description" class="description">{{ content.description }}</text>
     </template>
-
-    <view v-if="screen === 13" class="document-progress" aria-label="证件核验第 1 步，共 3 步"><view /></view>
 
     <template v-if="screen === 8">
       <text class="section-label">本人实名到账账户</text>
@@ -109,7 +141,7 @@
       </view>
     </template>
 
-    <view v-if="screen === 10 || screen === 20 || screen === 21 || screen === 22" class="card prototype-card">
+    <view v-if="screen === 10 || screen === 20 || screen === 22" class="card prototype-card">
       <view class="line"
         ><text>汇款金额</text><text>{{ euro(quote.cents) }}</text></view
       >
@@ -118,11 +150,12 @@
       >
       <view v-if="aio" class="line"><text>AIO 专人服务</text><text>€1.90</text></view>
       <view v-if="payment > 0 && (screen === 20 || screen === 22)" class="line"
-        ><text>{{ payment === 1 ? "Apple Pay" : "银行卡" }}通道费</text><text>{{ euro(channelFee) }}</text></view
+        ><text>{{ payment === 1 ? "Apple Pay" : "银行卡" }}通道费</text>
+        <text :class="{ 'wallet-channel-fee': screen === 22 && payment === 1 }">{{ euro(channelFee) }}</text></view
       >
       <view class="line total"
         ><text>合计支付</text
-        ><text>{{ euro(screen === 10 || screen === 21 ? quote.subtotal : paymentTotal) }}</text></view
+        ><text>{{ euro(screen === 10 ? quote.subtotal : paymentTotal) }}</text></view
       >
     </view>
 
@@ -131,11 +164,6 @@
         <text class="muted">{{ label }}</text
         ><text class="value">{{ rowValue(label, value) }}</text>
       </view>
-    </view>
-
-    <view v-if="screen === 21" class="transfer-tools">
-      <text class="callout good">演示收款信息，请勿向该账号转账。</text>
-      <button role="button" tabindex="0" class="text-link" @tap="copyReference">复制转账附言</button>
     </view>
 
     <view v-if="content.fields" class="card prototype-card">
@@ -175,7 +203,7 @@
     </template>
 
     <text v-if="formError && (screen === 9 || screen === 11)" class="callout warning" role="alert">{{ formError }}</text>
-    <text v-if="screen === 22" class="callout">付款方式演示 · 确认后进入模拟付款核验</text>
+    <text v-if="screen === 22" class="callout warning">付款确认演示，继续后可预览付款核验状态。</text>
     <view v-if="steps" class="card prototype-card" :class="{ 'linked-timeline': screen === 24 || screen === 29 }">
       <view
         v-for="(step, i) in steps"
@@ -196,6 +224,7 @@
         :key="option.label"
         class="tile"
         :class="{ selected: (screen === 13 ? documentType : payment) === i }"
+        :aria-pressed="(screen === 13 ? documentType : payment) === i"
         @tap="selectOption(i)"
       >
         <view class="tile-icon">
@@ -209,7 +238,8 @@
         </view>
         <view class="tile-copy">
           <text>{{ option.label }}</text>
-          <template v-if="screen === 20">
+          <text v-if="screen === 13" class="muted">{{ documentDescriptions[i] }}</text>
+          <template v-else>
             <text class="muted">{{ paymentDetails[i]?.fee }} 通道费</text>
             <text class="payment-option-total" :class="{ 'is-selected': payment === i }">
               合计支付 {{ paymentDetails[i]?.total }}
@@ -218,6 +248,10 @@
         </view>
         <text class="radio" :class="{ checked: (screen === 13 ? documentType : payment) === i }" />
       </button>
+    </view>
+    <view v-if="screen === 13" class="document-tip">
+      <text class="block">拍摄小提示</text>
+      <text>请在光线充足的环境拍摄，避免反光和遮挡，确保证件四角完整。</text>
     </view>
 
     <text v-if="screen === 20" class="callout warning">
@@ -437,7 +471,11 @@
     </view>
   </view>
 
-  <view v-if="content.actions" class="footer">
+  <view v-if="content.actions" class="footer" :class="{
+    'preview-flow-footer': [13, 16, 21, 22].includes(screen),
+    'liveness-footer': screen === 16,
+    'wallet-preview-footer': screen === 22 && payment === 1,
+  }">
     <button
       role="button"
       :tabindex="screen === 28 && !attachment ? -1 : 0"
@@ -449,14 +487,16 @@
     >
       {{ index === 0 ? primaryLabel || action.label : action.label }}
     </button>
+    <text v-if="screen === 21" class="hint">确认后将进入付款核验演示</text>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
-import { screens } from "./prototypeScreens";
+import { screens, transferIban } from "./prototypeScreens";
 import {
   accountSettings,
+  documentDescriptions,
   documentIcons,
   faq,
   legalSettings,
@@ -526,7 +566,6 @@ const emit = defineEmits<{
   "manage-coupon": [];
   "start-identity-review": [];
   "preview-wechat-binding": [];
-  "preview-apple-pay": [];
   legal: [kind: "privacy"];
 }>();
 
@@ -576,10 +615,7 @@ const source = ref("");
 const purposes = ["个人储蓄", "日常生活", "家庭支持", "其他"];
 const sources = ["工资收入", "个人储蓄", "其他"];
 const quote = computed(() => getQuote(props.amount, Math.round(Number(props.fee) * 100), props.aio));
-const channelRateLabel = new Intl.NumberFormat("zh-CN", {
-  style: "percent",
-  maximumFractionDigits: 2,
-}).format(previewChannelRate);
+const channelRateLabel = `${Number((previewChannelRate * 100).toFixed(2))}%`;
 const channelFee = computed(() => getPreviewChannelFee(quote.value.cents, props.payment));
 const displayReceived = computed(() => (props.order ? formatAmount(props.order.received) : props.received));
 const paymentTotal = computed(
@@ -666,7 +702,7 @@ function rateLabel(rate: number) {
 }
 
 function rowValue(label: string, value: string) {
-  if (label === "订单编号" || label === "转账附言") return props.orderId;
+  if (label === "订单编号" || label === "付款附言") return props.orderId;
   const order = props.order;
   if (label === "汇款金额") return euro(order?.amount ?? quote.value.cents);
   if (label === "退款金额") return euro(paymentTotal.value);
@@ -690,7 +726,6 @@ function actionClasses(index: number) {
     primary: index === 0,
     secondary: index > 0,
     inverted: props.screen === 16 && index === 0,
-    "camera-secondary": props.screen === 16 && index > 0,
     "wallet-button": props.screen === 22 && props.payment === 1 && index === 0,
     "logout-button": props.screen === 38,
   };
@@ -742,10 +777,6 @@ function follow(next: number, index: number) {
   }
   if (props.screen === 16 && next === 17) {
     emit("start-identity-review");
-    return;
-  }
-  if (props.screen === 20 && props.payment === 1 && index === 0) {
-    emit("preview-apple-pay");
     return;
   }
   if (props.screen >= 21 && props.screen <= 30 && next in orderStages) {
@@ -805,10 +836,10 @@ function chooseAttachment() {
   );
 }
 
-function copyReference() {
+function copyTransferText(value: string) {
   uni.setClipboardData({
-    data: props.orderId,
-    fail: () => uni.showToast({ title: "复制失败，请手动填写转账附言", icon: "none" }),
+    data: value,
+    fail: () => uni.showToast({ title: "复制失败，请重试", icon: "none" }),
   });
 }
 

@@ -54,9 +54,9 @@ final class YabandRemitMemberRepository extends AbstractRepository
                 ->select('member_id')->whereIn('status', ['pending', 'approved']));
     }
 
-    public function getOrCreate(int $member): YabandRemitMember
+    public function getOrCreate(int $member, ?string $scope = null): YabandRemitMember
     {
-        return $this->query()->firstOrCreate(['member_id' => $member], ['create_request_id' => (string) Str::uuid()]);
+        return $this->query()->firstOrCreate(['member_id' => $member], ['create_request_id' => (string) Str::uuid(), 'channel_scope' => $scope]);
     }
 
     public function saveState(YabandRemitMember $link, ?string $uid, ?array $statuses): void

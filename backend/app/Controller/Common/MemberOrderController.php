@@ -13,12 +13,27 @@ final class MemberOrderController extends AbstractController
 {
     public function __construct(private RemittanceOrderService $orders) {}
 
+    /** 按本人订单状态分页，省略筛选时兼容原列表。 */
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->validate(['page' => ['sometimes', 'integer', 'between:1,1000000']]);
-        $result = $this->orders->page((int) ($filters['page'] ?? 1), (int) $request->user()->getKey());
+        $input = $request->validate([
+            'page' => ['sometimes', 'integer', 'between:1,1000000'],
+            'status' => ['sometimes', 'in:processing,completed,refund'],
+        ]);
+        $status = $input['status'] ?? null;
+        $result = $this->orders->page((int) ($input['page'] ?? 1), (int) $request->user()->getKey(), filters: ['member_status' => $status]);
+        $payload = $result->getData();
+        if ($status !== null) {
+            $payload['status_filter'] = $status;
+        }
 
-        return $this->success($result->getData());
+        return $this->success($payload);
+    }
+
+    /** 读取个人中心汇款金额，统计范围仅包括当前会员。 */
+    public function summary(Request $request): JsonResponse
+    {
+        return $this->success($this->orders->memberSummary((int) $request->user()->getKey()));
     }
 
     public function show(Request $request, string $reference): JsonResponse

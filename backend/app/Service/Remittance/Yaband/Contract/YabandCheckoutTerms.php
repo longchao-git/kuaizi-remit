@@ -3,8 +3,9 @@
 namespace App\Service\Remittance\Yaband\Contract;
 
 use App\Model\System\User;
+use App\Service\Remittance\Contract\RemittanceCheckoutTerms;
 
-interface YabandCheckoutTerms
+interface YabandCheckoutTerms extends RemittanceCheckoutTerms
 {
     /** 返回会员本人且已核验的收款账户，label 仅包含脱敏信息。 */
     public function accounts(User $member, string $payoutMethod): array;

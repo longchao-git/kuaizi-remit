@@ -98,15 +98,25 @@ class AppServiceProvider extends ServiceProvider
     private function configureRateLimiting(): void
     {
         RateLimiter::for('sms-send', static fn (Request $request): array => [
-            Limit::perMinute(1)->by('sms-send:phone:'.(string) $request->input('mobile')),
-            Limit::perHour(5)->by('sms-send:phone:'.(string) $request->input('mobile')),
-            Limit::perDay(10)->by('sms-send:phone:'.(string) $request->input('mobile')),
+            Limit::perMinute(1)->by('sms-send:phone:'.self::smsPhoneBucket($request)),
+            Limit::perHour(5)->by('sms-send:phone:'.self::smsPhoneBucket($request)),
+            Limit::perDay(10)->by('sms-send:phone:'.self::smsPhoneBucket($request)),
             Limit::perMinute(5)->by('sms-send:ip:'.$request->ip()),
         ]);
 
         RateLimiter::for('sms-login', static fn (Request $request): array => [
-            Limit::perMinute(5)->by('sms-login:phone:'.(string) $request->input('mobile')),
+            Limit::perMinute(5)->by('sms-login:phone:'.self::smsPhoneBucket($request)),
             Limit::perMinute(10)->by('sms-login:ip:'.$request->ip()),
         ]);
+    }
+
+    private static function smsPhoneBucket(Request $request): string
+    {
+        $mobile = $request->input('mobile');
+        if (! is_string($mobile)) {
+            return 'invalid';
+        }
+
+        return hash_hmac('sha256', 'sms-rate-limit:'.$mobile, (string) config('app.key'));
     }
 }

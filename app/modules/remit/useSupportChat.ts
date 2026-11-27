@@ -3,8 +3,13 @@ import request, { UnauthorizedError } from '@/request/http';
 import { BASE_URL } from '@/config/api';
 import { sessionService } from '@/shared/session/application/SessionService';
 
-type Message = { id: number; sender: 'staff' | 'member'; body: string };
-type History = { list: Message[]; next_after_id: number | null; has_more: boolean };
+export type SupportMessage = {
+  id: number;
+  sender: 'staff' | 'member';
+  body: string;
+  created_at?: string;
+};
+type History = { list: SupportMessage[]; next_after_id: number | null; has_more: boolean };
 type Draft = { id: string; body: string };
 type ReadStatus = { unread_count: number };
 
@@ -24,7 +29,7 @@ export function useSupportChat(
   options: { listen?: () => boolean; expired?: () => void; notificationsChanged?: () => void; couponsChanged?: () => void } = {},
 ) {
   const connected = computed(() => Boolean(sessionService.getToken()));
-  const messages = ref<Message[]>([]);
+  const messages = ref<SupportMessage[]>([]);
   const live = ref(false);
   const status = ref('');
   const sending = ref(false);

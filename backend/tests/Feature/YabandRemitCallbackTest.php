@@ -168,6 +168,31 @@ final class YabandRemitCallbackTest extends TestCase
         $this->assertUnchanged();
     }
 
+    public function test_callback_uses_trusted_remote_address_on_both_paths(): void
+    {
+        config(['yaband_remit.callback_ip_required' => true, 'yaband_remit.callback_source_ips' => '']);
+        $body = $this->notice([...$this->transaction, 'type' => 'transaction']);
+        $this->postJson('/callbacks/yaband/remit/transaction', $body)->assertForbidden();
+
+        config(['yaband_remit.callback_source_ips' => '192.0.2.0/24,2001:db8::/48']);
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.1'])
+            ->postJson('/callbacks/yaband/remit/transaction', $body, ['X-Forwarded-For' => '192.0.2.11', 'CF-Connecting-IP' => '192.0.2.11'])
+            ->assertForbidden();
+        Http::assertNothingSent();
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.11'])->postJson('/api/callbacks/yaband/remit/transaction', $body)->assertOk();
+        $this->withServerVariables(['REMOTE_ADDR' => '2001:db8::1'])->postJson('/callbacks/yaband/remit/transaction', $body)->assertOk();
+        $this->assertCount(1, Http::recorded(fn (Request $r) => str_ends_with($r->url(), '/api/transaction/query')));
+    }
+
+    public function test_stale_query_does_not_revert_a_completed_refund(): void
+    {
+        $this->order->forceFill(['income_code' => '00', 'outgoing_code' => '05', 'refund_code' => '04'])->saveOrFail();
+        $body = $this->notice([...$this->transaction, 'type' => 'transaction']);
+        $this->postJson('/callbacks/yaband/remit/transaction', $body)->assertConflict();
+        $this->assertDatabaseHas('remittance_orders', ['reference' => $this->order->reference, 'outgoing_code' => '05', 'refund_code' => '04']);
+        $this->assertDatabaseCount('member_notifications', 0);
+    }
+
     public function test_valid_order_notice_requeries_and_retries_do_not_redeem_or_notify_twice(): void
     {
         $body = $this->notice([...$this->transaction, 'type' => 'transaction']);
@@ -178,7 +203,7 @@ final class YabandRemitCallbackTest extends TestCase
         $this->assertNotNull($this->order->fresh()->provider_checked_at);
         $this->assertDatabaseCount('member_notifications', 1);
         $this->assertDatabaseMissing('remittance_coupons', ['id' => $this->couponId, 'redeemed_at' => null]);
-        $this->assertCount(3, Http::recorded(fn (Request $r) => str_ends_with($r->url(), '/api/transaction/query')));
+        $this->assertCount(1, Http::recorded(fn (Request $r) => str_ends_with($r->url(), '/api/transaction/query')));
     }
 
     public function test_callback_claims_cannot_override_authoritative_query_states(): void

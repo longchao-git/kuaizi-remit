@@ -11,9 +11,8 @@ use App\Repository\Remittance\RemittanceCouponRepository;
 use App\Repository\Remittance\RemittanceOrderRepository;
 use App\Repository\Remittance\RemittanceQuoteRecordRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
+use App\Service\Remittance\RemittanceChannels;
 use App\Service\Remittance\RemittanceDeclaration;
-use App\Service\Remittance\Yaband\Contract\YabandCheckoutTerms;
-use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\DatabaseManager;
@@ -29,24 +28,22 @@ final class MemberCheckoutService
         private RemittanceQuoteRecordRepository $quotes,
         private RemittanceOrderRepository $orders,
         private YabandRemitMemberRepository $members,
-        private YabandRemitClient $yaband,
+        private RemittanceChannels $channels,
         private RemittanceCouponRepository $coupons,
         private MemberClosureRepository $closures,
         private DatabaseManager $database,
         private MemberKycService $kyc,
-        private YabandInstitutionPaymentRequest $institutionPayment,
-        private YabandWhiteLabelPaymentRequest $whiteLabelPayment,
     ) {}
 
     /** 查询结算适配器提供的本人账户，用于下单确认时选择。 */
     public function accounts(User $member, string $payoutMethod): Result
     {
-        if (! app()->bound(YabandCheckoutTerms::class)) {
-            return Result::fail('本人收款账户核验尚未开通', 503);
-        }
-
         try {
-            $rows = app(YabandCheckoutTerms::class)->accounts($member, $payoutMethod);
+            $terms = $this->channels->checkoutTerms($this->channels->activeScope());
+            if ($terms === null) {
+                return Result::fail('本人收款账户核验尚未开通', 503);
+            }
+            $rows = $terms->accounts($member, $payoutMethod);
             $safe = array_map(static fn (array $row): array => ['reference' => $row['reference'], 'label' => $row['label']], $rows);
 
             return Result::success($safe);
@@ -67,7 +64,17 @@ final class MemberCheckoutService
         if (($snapshot['mode'] ?? null) !== 'locked' || ($snapshot['can_submit'] ?? null) !== true) {
             return Result::fail('试算报价不能用于正式下单', 409);
         }
-        if (! app()->bound(YabandCheckoutTerms::class) || ! app()->bound(YabandRemitSigner::class)) {
+        try {
+            $scope = $this->channels->storedScope($quote->channel_scope);
+            if ($scope !== $this->channels->activeScope()) {
+                return Result::fail('报价所属渠道已切换，请重新报价', 409);
+            }
+            $terms = $this->channels->checkoutTerms($scope);
+            if ($terms === null) {
+                return Result::fail('正式汇款通道尚未开通', 503);
+            }
+            $channel = $this->channels->resolve($scope);
+        } catch (YabandException) {
             return Result::fail('正式汇款通道尚未开通', 503);
         }
 
@@ -77,6 +84,9 @@ final class MemberCheckoutService
         }
         try {
             $order = $this->orders->getForQuote((int) $member->id, $quoteReference);
+            if ($order !== null && $this->channels->storedScope($order->channel_scope) !== $scope) {
+                return Result::fail('现有订单属于原渠道，请查询原订单', 409);
+            }
             $declaration = RemittanceDeclaration::validate($declaration ?? $order?->declaration ?? $quote->declaration ?? []);
             if ($order?->declaration !== null && $order->declaration !== $declaration) {
                 return Result::fail('用途声明与原订单不一致，请先查询原订单', 409);
@@ -87,7 +97,7 @@ final class MemberCheckoutService
                     : Result::fail('锁汇已过期，请重新报价', 409);
             }
             $link = $this->members->findFor((int) $member->id);
-            if ($link?->uid === null) {
+            if ($link?->uid === null || $this->channels->storedScope($link->channel_scope) !== $scope) {
                 return Result::fail('请先完成身份认证并开通汇款', 409);
             }
             // 新支付及结果未知的重试须查询当前资格；已有交易的幂等读取不重新创建支付。
@@ -104,7 +114,7 @@ final class MemberCheckoutService
             if ($this->quoteExpired($snapshot)) {
                 return Result::fail('锁汇已过期，请重新报价', 409);
             }
-            $prepared = app(YabandCheckoutTerms::class)->prepare($member, [...$snapshot, 'declaration' => $declaration], $account, $ip);
+            $prepared = $terms->prepare($member, [...$snapshot, 'declaration' => $declaration], $account, $ip);
             if ($this->quoteExpired($snapshot)) {
                 return Result::fail('锁汇已过期，请重新报价', 409);
             }
@@ -115,11 +125,7 @@ final class MemberCheckoutService
             unset($fields['order_id'], $fields['request_id'], $fields['type'], $fields['pay_method']);
             $fields['amount'] = $this->decimal($snapshot['principal_minor']);
             // 协议错误必须在订单及优惠券预留之前拒绝，不能让错误参数占用结算资源。
-            if (! $prepared['white_label']) {
-                $fields = $this->institutionPayment->prepareFields($fields);
-            } else {
-                $fields = $this->whiteLabelPayment->prepareFields($fields);
-            }
+            $fields = $channel->preparePayment($fields, $prepared['white_label']);
             $payee = is_string($fields['payee'] ?? null) ? json_decode($fields['payee'], true, 16, JSON_THROW_ON_ERROR) : ($fields['payee'] ?? []);
             if (($payee['relationship'] ?? null) !== '01') {
                 throw new YabandException('本项目只支持本人收款账户。');
@@ -130,11 +136,12 @@ final class MemberCheckoutService
                 throw new YabandException('支付适配器的用途声明与用户确认内容不一致。');
             }
             $hash = hash_hmac('sha256', json_encode([$account, $prepared['white_label'], $fields], JSON_THROW_ON_ERROR), (string) config('app.key'));
-            $order ??= $this->reserve((int) $member->id, $quoteReference, $snapshot, $prepared['white_label'], $hash, $declaration);
+            $order ??= $this->reserve((int) $member->id, $quoteReference, $snapshot, $prepared['white_label'], $hash, $declaration, $scope);
             if ($order instanceof Result) {
                 return $order;
             }
-            if ((int) $order->member_id !== (int) $member->id || ! hash_equals($order->payment_request_hash ?? '', $hash)) {
+            if ((int) $order->member_id !== (int) $member->id || $this->channels->storedScope($order->channel_scope) !== $scope
+                || ! hash_equals($order->payment_request_hash ?? '', $hash)) {
                 return Result::fail('支付请求与原订单不一致，请先查询处理结果', 409);
             }
             if ($order->provider_trade_id !== null) {
@@ -148,7 +155,7 @@ final class MemberCheckoutService
                 return Result::fail('锁汇已过期，请重新报价', 409);
             }
 
-            $result = $this->yaband->submitPayment([
+            $result = $channel->submitPayment([
                 ...$fields, 'order_id' => $order->reference, 'request_id' => $order->payment_request_id,
             ], $order->white_label);
             $trade = $result['trade_id'] ?? null;
@@ -200,9 +207,9 @@ final class MemberCheckoutService
     }
 
     /** 在会员事务锁内保留订单和优惠券，禁止注销通过后新建汇款。 */
-    private function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash, array $declaration): RemittanceOrder|Result
+    private function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash, array $declaration, string $scope): RemittanceOrder|Result
     {
-        return $this->database->transaction(function () use ($member, $quote, $snapshot, $whiteLabel, $hash, $declaration): RemittanceOrder|Result {
+        return $this->database->transaction(function () use ($member, $quote, $snapshot, $whiteLabel, $hash, $declaration, $scope): RemittanceOrder|Result {
             $this->coupons->lockMember($member);
             $existing = $this->orders->getForQuote($member, $quote);
             if ($existing !== null) {
@@ -228,7 +235,7 @@ final class MemberCheckoutService
                 return Result::fail('优惠报价缺少关联券，请重新报价', 409);
             }
 
-            $order = $this->orders->reserve($member, $quote, $snapshot, $whiteLabel, $hash, $declaration);
+            $order = $this->orders->reserve($member, $quote, $snapshot, $whiteLabel, $hash, $declaration, $scope);
             if ($couponId !== null && ! $this->coupons->hold($couponId, $member, $order->reference)) {
                 throw new RuntimeException('无法锁定订单优惠券。');
             }

@@ -9,6 +9,7 @@ use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\Contract\YabandRemitCallbackVerifier;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,53 @@ final class RemittanceOrderTest extends TestCase
             ->getJson('/api/admin/remittance/orders?member_id='.$bob->id)->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.reference', $otherOrder);
         $this->postJson('/api/admin/remittance/orders/'.$order.'/refresh')->assertForbidden();
+    }
+
+    public function test_member_order_status_is_scoped_and_applied_before_pagination(): void
+    {
+        $member = User::factory()->create();
+        $other = User::factory()->create();
+        $completed = $this->seedOrder($member, ['income_code' => '00', 'outgoing_code' => '05']);
+        $refunded = $this->seedOrder($member, ['income_code' => '00', 'outgoing_code' => '05', 'refund_code' => '04']);
+        $refundFailed = $this->seedOrder($member, ['income_code' => '00', 'outgoing_code' => '05', 'refund_code' => '05']);
+        $this->seedOrder($other, ['income_code' => '00', 'outgoing_code' => '05']);
+        $this->seedOrder($member, ['income_code' => '00', 'outgoing_code' => '02']);
+        for ($index = 0; $index < 20; $index++) {
+            $this->seedOrder($member);
+        }
+
+        $this->withToken($member->createToken('member')->plainTextToken);
+        $this->getJson('/app/remittance/orders')->assertOk()->assertJsonPath('data.total', 24)->assertJsonMissingPath('data.status_filter');
+        $this->getJson('/app/remittance/orders?status=completed')->assertOk()->assertJsonPath('data.status_filter', 'completed')
+            ->assertJsonPath('data.total', 1)->assertJsonPath('data.list.0.reference', $completed);
+        $this->getJson('/app/remittance/orders?status=processing&page=2')->assertOk()->assertJsonPath('data.total', 21)
+            ->assertJsonPath('data.page', 2)->assertJsonCount(1, 'data.list');
+        $this->getJson('/app/remittance/orders?status=refund')->assertOk()->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.list.0.reference', $refundFailed)->assertJsonPath('data.list.1.reference', $refunded);
+        $this->getJson('/app/remittance/orders?status=all')->assertUnprocessable();
+    }
+
+    public function test_member_summary_counts_only_completed_real_orders_created_in_the_local_month(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-12-01 08:00:00', 'UTC'));
+        Http::preventStrayRequests();
+        $member = User::factory()->create();
+        $other = User::factory()->create();
+        $completed = ['income_code' => '00', 'outgoing_code' => '05', 'principal_minor' => 32000];
+
+        $this->seedOrder($member, [...$completed, 'created_at' => '2026-11-30 23:00:00']);
+        $this->seedOrder($member, [...$completed, 'created_at' => '2026-11-30 22:59:59']);
+        $this->seedOrder($member, [...$completed, 'created_at' => '2026-12-31 23:00:00']);
+        $this->seedOrder($member, [...$completed, 'refund_code' => '04']);
+        $this->seedOrder($member, [...$completed, 'channel_scope' => 'local']);
+        $this->seedOrder($member);
+        $this->seedOrder($other, $completed);
+
+        $this->getJson('/app/remittance/orders/summary')->assertUnauthorized();
+        $this->withToken($member->createToken('member')->plainTextToken)->getJson('/app/remittance/orders/summary')
+            ->assertOk()->assertJsonPath('data.monthly_sent_principal_minor', 32000)
+            ->assertJsonPath('data.remaining_limit_minor', null);
+        Http::assertNothingSent();
     }
 
     public function test_staff_can_refresh_existing_trade_and_mismatched_or_unsigned_result_does_not_change_it(): void
@@ -264,13 +312,14 @@ final class RemittanceOrderTest extends TestCase
         $this->assertDatabaseMissing('member_notifications', ['id' => $notification['id'], 'read_at' => null]);
     }
 
-    private function seedOrder(User $member): string
+    private function seedOrder(User $member, array $attributes = []): string
     {
         $reference = (string) Str::uuid();
         DB::table('remittance_orders')->insert([
             'reference' => $reference, 'provider_trade_id' => 'trade-'.$reference, 'member_id' => $member->id,
             'white_label' => false, 'principal_minor' => 10000, 'income_code' => '03',
             'outgoing_code' => '01', 'refund_code' => '00', 'created_at' => now(), 'updated_at' => now(),
+            ...$attributes,
         ]);
 
         return $reference;

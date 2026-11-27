@@ -5,8 +5,10 @@ export interface RemittanceDeclaration {
 }
 
 export const fundSources = [
-  { value: '01', label: '工资收入' }, { value: '02', label: '储蓄' },
-  { value: '03', label: '经营收入' }, { value: '04', label: '兼职收入' },
+  { value: '01', label: '工资收入', description: '受雇工作取得的薪资' },
+  { value: '02', label: '储蓄', description: '本人已有的存款' },
+  { value: '03', label: '经营收入', description: '个人经营活动所得' },
+  { value: '04', label: '兼职收入', description: '兼职工作所得' },
 ];
 export const transferPurposes = [
   { value: '01', label: '家庭支持' }, { value: '02', label: '账单支付' },

@@ -22,6 +22,12 @@ final class RemittanceOrderRepository extends AbstractRepository
         'exception' => "refund_code IN ('05', '06') OR (refund_code = '00' AND (income_code IN ('05', '06', '07', '08') OR (income_code = '00' AND outgoing_code IN ('03', '06', '07'))))",
     ];
 
+    private const MEMBER_STATES = [
+        'processing' => self::STAFF_STATES['pending_payment'].' OR '.self::STAFF_STATES['processing'],
+        'completed' => self::STAFF_STATES['paid_out'],
+        'refund' => "refund_code IN ('01', '02', '03', '04', '05', '06', '07')",
+    ];
+
     protected function model(): RemittanceOrder
     {
         return new RemittanceOrder;
@@ -29,11 +35,22 @@ final class RemittanceOrderRepository extends AbstractRepository
 
     public function page(int $page, ?int $member, ?string $reference, array $filters = []): LengthAwarePaginator
     {
-        $status = self::STAFF_STATES[$filters['status'] ?? ''] ?? null;
+        $status = self::STAFF_STATES[$filters['status'] ?? '']
+            ?? self::MEMBER_STATES[$filters['member_status'] ?? '']
+            ?? null;
 
         return $this->filtered($member, $reference, $filters)
             ->when($status !== null, fn ($query) => $query->whereRaw("($status)"))
             ->orderByDesc('id')->paginate(20, page: $page);
+    }
+
+    /** 汇总指定下单期间已下发的本人订单本金，不计模拟或已发生退款的订单。 */
+    public function memberSentPrincipal(int $member, DateTimeInterface $from, DateTimeInterface $until): int
+    {
+        return (int) $this->query()->where('member_id', $member)
+            ->where('created_at', '>=', $from)->where('created_at', '<', $until)
+            ->where(fn ($query) => $query->whereNull('channel_scope')->orWhere('channel_scope', '!=', 'local'))
+            ->whereRaw(self::STAFF_STATES['paid_out'])->sum('principal_minor');
     }
 
     public function staffTotals(?int $member, ?string $reference, array $filters): array
@@ -65,12 +82,13 @@ final class RemittanceOrderRepository extends AbstractRepository
             ->first();
     }
 
-    public function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash, ?array $declaration = null): RemittanceOrder
+    public function reserve(int $member, string $quote, array $snapshot, bool $whiteLabel, string $hash, ?array $declaration = null, ?string $scope = null): RemittanceOrder
     {
         $order = $this->query()->createOrFirst(['quote_reference' => $quote], [
             'reference' => (string) Str::uuid(), 'member_id' => $member, 'white_label' => $whiteLabel, 'quote_snapshot' => $snapshot,
             'principal_minor' => $snapshot['principal_minor'], 'payment_request_id' => (string) Str::uuid(), 'payment_request_hash' => $hash,
             'income_code' => '02', 'outgoing_code' => '01', 'refund_code' => '00',
+            'channel_scope' => $scope,
         ]);
         if ($order->wasRecentlyCreated) {
             $order->forceFill(['declaration' => $declaration])->saveOrFail();

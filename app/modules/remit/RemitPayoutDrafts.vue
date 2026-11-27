@@ -1,19 +1,40 @@
 <template>
-  <view class="body payout-drafts">
-    <text class="description">收款资料保存后为待核验，暂不可用于付款。请填写本人资料。</text>
+  <view class="body payout-drafts" :class="{ 'is-editing': editing }">
+    <text v-if="editing" class="heading payout-heading">
+      {{ revision ? '编辑收款资料' : form.payout_method === 'bank' ? '新增人民币到账账户' : '添加本人微信收款资料' }}
+    </text>
+    <text class="description">{{ editing ? '收款资料须与筷子闪汇实名认证信息一致。' : '收款资料保存后为待核验，暂不可用于付款。' }}</text>
     <text v-if="error" class="offer description" role="alert">{{ error }}</text>
-    <view v-if="editing" class="card payout-form">
-      <view class="line">
-        <button class="inline-action" :class="{ accent: form.payout_method === 'bank' }" :disabled="busy" @tap="form.payout_method = 'bank'">银行卡</button>
-        <button class="inline-action" :class="{ accent: form.payout_method === 'wechat' }" :disabled="busy" @tap="form.payout_method = 'wechat'">微信收款</button>
+    <template v-if="editing">
+      <view class="payout-editor">
+        <view class="line payout-methods">
+          <button class="secondary" :class="{ 'is-selected': form.payout_method === 'bank' }"
+            :aria-pressed="form.payout_method === 'bank'" :disabled="busy" @tap="form.payout_method = 'bank'">银行卡</button>
+          <button class="secondary" :class="{ 'is-selected': form.payout_method === 'wechat' }"
+            :aria-pressed="form.payout_method === 'wechat'" :disabled="busy" @tap="form.payout_method = 'wechat'">微信收款</button>
+        </view>
+        <view class="card payout-field payout-name-card">
+          <view class="payout-name-field">
+            <text>本人名字</text>
+            <input v-model="form.first_name" placeholder="与证件一致" aria-label="本人名字" maxlength="64" :disabled="busy" />
+          </view>
+          <view class="payout-name-field">
+            <text>本人姓氏</text>
+            <input v-model="form.last_name" placeholder="与证件一致" aria-label="本人姓氏" maxlength="64" :disabled="busy" />
+          </view>
+        </view>
+        <view class="card payout-field">
+          <text>{{ form.payout_method === 'bank' ? '银行卡号' : '微信收款账号' }}</text>
+          <input v-model="form.account" placeholder="输入收款账号" aria-label="收款账号" maxlength="64" :disabled="busy" />
+          <text v-if="maskedAccount" class="description">已存账号 {{ maskedAccount }}；不更换账号时留空。</text>
+        </view>
+        <text class="payout-form-note">请使用本人账户。收款资料保存后需核验通过才能使用。</text>
       </view>
-      <input v-model="form.first_name" placeholder="本人名字（与证件一致）" maxlength="64" :disabled="busy" />
-      <input v-model="form.last_name" placeholder="本人姓氏（与证件一致）" maxlength="64" :disabled="busy" />
-      <text v-if="maskedAccount" class="description">已存账号 {{ maskedAccount }}；不更换账号时留空。</text>
-      <input v-model="form.account" placeholder="收款账号" maxlength="64" :disabled="busy" />
-      <button class="primary" :disabled="busy" @tap="save">{{ busy ? '保存中…' : '保存待核验资料' }}</button>
-      <button class="inline-action" :disabled="busy" @tap="back">取消编辑</button>
-    </view>
+      <view class="payout-editor-actions">
+        <button class="inline-action accent" :disabled="busy" @tap="back">取消编辑</button>
+        <button class="primary" :disabled="busy" @tap="save">{{ busy ? '保存中…' : '保存待核验资料' }}</button>
+      </view>
+    </template>
     <template v-else>
       <button class="primary" :disabled="busy" @tap="edit()">新增收款资料</button>
       <text v-if="!busy && !rows.length && !error" class="description">暂无收款资料</text>
@@ -34,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import request, { UnauthorizedError, ValidationError } from '@/request/http';
 
 interface PayoutDraft {
@@ -55,6 +76,11 @@ const reference = ref('');
 const revision = ref<string>();
 const maskedAccount = ref('');
 const editing = ref(false);
+const pageTitle = computed(() => {
+  if (!editing.value) return '本人收款资料';
+  if (revision.value) return '编辑收款资料';
+  return form.value.payout_method === 'bank' ? '添加本人银行卡' : '添加微信收款资料';
+});
 const busy = ref(false);
 const error = ref('');
 const page = ref(1);
@@ -139,11 +165,62 @@ function back(): boolean {
 
 onMounted(() => { void load(1); });
 onUnmounted(() => { active = false; });
-defineExpose({ back });
+defineExpose({ back, pageTitle });
 </script>
 
 <style scoped>
 .payout-drafts, .payout-form { display: grid; gap: 20rpx; }
 .payout-form { padding: 24rpx; overflow-wrap: anywhere; }
-.payout-form input { border: 1rpx solid #e1e1e7; border-radius: 14rpx; padding: 18rpx; }
+.payout-drafts.is-editing {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding-bottom: max(72rpx, env(safe-area-inset-bottom));
+}
+.payout-heading + .description { margin-top: 0; }
+.payout-editor,
+.payout-field {
+  display: grid;
+  gap: 16rpx;
+}
+.payout-field {
+  align-content: center;
+  min-height: 136rpx;
+  padding: 22rpx 30rpx;
+  color: #6d7180;
+  font-size: 24rpx;
+}
+.payout-field input {
+  color: #111318;
+  font-size: 30rpx;
+}
+.payout-field:focus-within { border-color: var(--remit-accent); }
+.payout-field .description { margin-top: 0; }
+.payout-name-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.payout-name-field { display: grid; min-width: 0; gap: 12rpx; }
+.payout-form-note {
+  display: block;
+  padding: 18rpx 24rpx;
+  border-radius: 24rpx;
+  background: #fff7f1;
+  color: #9b653c;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+.payout-methods .secondary {
+  flex: 1;
+  min-height: 76rpx;
+  font-size: 26rpx;
+}
+.payout-methods .is-selected {
+  border-color: #aa9eff;
+  background: #eeebff;
+  color: var(--remit-accent);
+}
+.payout-editor-actions {
+  display: grid;
+  gap: 10rpx;
+  margin-inline: -8rpx;
+  margin-top: auto;
+}
 </style>

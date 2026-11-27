@@ -4,6 +4,7 @@ namespace App\Repository\System;
 
 use App\Model\System\SmsCode;
 use App\Repository\AbstractRepository;
+use App\Service\System\PhoneLookup;
 use DateTimeInterface;
 
 /** @extends AbstractRepository<SmsCode> */
@@ -18,7 +19,7 @@ final class SmsCodeRepository extends AbstractRepository
     public function replace(string $mobile, string $scene, string $hash, DateTimeInterface $expiresAt, ?string $ip): SmsCode
     {
         return $this->query()->updateOrCreate(
-            ['mobile_e164' => $mobile, 'scene' => $scene],
+            ['mobile_lookup' => app(PhoneLookup::class)->digest($mobile), 'scene' => $scene],
             [
                 'code_hash' => $hash,
                 'attempts' => 0,
@@ -31,12 +32,12 @@ final class SmsCodeRepository extends AbstractRepository
 
     public function lockActive(string $mobile, string $scene): ?SmsCode
     {
-        return $this->query()->where('mobile_e164', $mobile)->where('scene', $scene)->lockForUpdate()->first();
+        return $this->query()->where('mobile_lookup', app(PhoneLookup::class)->digest($mobile))->where('scene', $scene)->lockForUpdate()->first();
     }
 
     public function forget(string $mobile, string $scene): void
     {
-        $this->query()->where('mobile_e164', $mobile)->where('scene', $scene)->delete();
+        $this->query()->where('mobile_lookup', app(PhoneLookup::class)->digest($mobile))->where('scene', $scene)->delete();
     }
 
     public function purgeExpired(): void

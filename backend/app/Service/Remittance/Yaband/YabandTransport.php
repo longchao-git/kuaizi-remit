@@ -160,6 +160,9 @@ final class YabandTransport
     /** 所有请求只发往已配置的HTTPS源站，不携带URL凭据或跟随重定向。 */
     private function baseUrl(): string
     {
+        if (config('remit.channel') !== 'yaband') {
+            throw new YabandException('当前环境不允许连接雅本汇款 API。');
+        }
         $value = config('yaband_remit.base_url');
         if (! is_string($value) || ! filter_var($value, FILTER_VALIDATE_URL)) {
             throw new YabandException('雅本汇款 API 地址尚未配置。');

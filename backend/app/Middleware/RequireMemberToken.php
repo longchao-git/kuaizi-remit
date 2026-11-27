@@ -5,6 +5,7 @@ namespace App\Middleware;
 use App\Common\ResponseResult;
 use App\Common\Result;
 use App\Model\System\User;
+use App\Service\System\MemberDeviceSignature;
 use App\Service\System\MemberSessionService;
 use Closure;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 /** App 会话和报价只接受非员工会员的 Bearer 令牌。 */
 final class RequireMemberToken
 {
+    public function __construct(private readonly MemberDeviceSignature $signatures) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -31,6 +34,13 @@ final class RequireMemberToken
             );
             if ($externalWrite || $path === 'app/remittance/payout-accounts') {
                 return ResponseResult::json(Result::fail('测试账号暂不支持实名认证或真实资金操作', 403), 403);
+            }
+        }
+
+        if ($this->signatures->requiresProof($request)) {
+            $proof = $this->signatures->verify($request, $token);
+            if ($proof->isFail()) {
+                return ResponseResult::json($proof, $proof->getCode());
             }
         }
 

@@ -2,11 +2,12 @@
 
 namespace App\Service\Remittance\Yaband;
 
+use App\Service\Remittance\Contract\RemittanceChannel;
 use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
 use Illuminate\Container\Attributes\Singleton;
 
 #[Singleton]
-final class YabandRemitClient
+final class YabandRemitClient implements RemittanceChannel
 {
     /** 复用鉴权、HTTP传输与响应解析，不在业务方法里自动重放请求。 */
     public function __construct(
@@ -93,6 +94,12 @@ final class YabandRemitClient
         }
 
         return $data;
+    }
+
+    /** 在订单预留前按当前雅本商户模式核对支付字段。 */
+    public function preparePayment(array $data, bool $whiteLabel): array
+    {
+        return $whiteLabel ? $this->whiteLabelPayment->prepareFields($data) : $this->institutionPayment->prepareFields($data);
     }
 
     /** 按订单的实际模式校验字段表及JSON序列化，不把旧机构示例当白标请求。 */

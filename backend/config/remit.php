@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'channel' => env('REMIT_CHANNEL', 'yaband'),
+    'local_scenario' => env('REMIT_LOCAL_SCENARIO', 'pending'),
+    'phone_lookup_key' => env('REMIT_PHONE_LOOKUP_KEY'),
+    'require_device_signatures' => env('REMIT_REQUIRE_DEVICE_SIGNATURES', false),
     'platform_admin_emails' => array_values(array_filter(array_map(
         static fn (string $email): string => strtolower(trim($email)),
         explode(',', (string) env('REMIT_PLATFORM_ADMIN_EMAILS', '')),

@@ -8,7 +8,8 @@ use App\Model\System\User;
 use App\Repository\Remittance\MemberClosureRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
-use App\Service\Remittance\Yaband\Contract\YabandRemitSigner;
+use App\Service\Remittance\Contract\RemittanceChannel;
+use App\Service\Remittance\RemittanceChannels;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\DatabaseManager;
@@ -20,7 +21,7 @@ final class MemberKycService
 {
     /** 复用会员、通知和事务，并在身份变更前核对注销审核状态。 */
     public function __construct(
-        private YabandRemitClient $client,
+        private RemittanceChannels $channels,
         private YabandRemitMemberRepository $members,
         private MemberNotificationService $notices,
         private DatabaseManager $database,
@@ -29,16 +30,21 @@ final class MemberKycService
 
     public function status(User $member): Result
     {
-        return $this->withMemberLock((int) $member->getKey(), function () use ($member): Result {
+        return $this->withMemberLock((int) $member->getKey(), function (string $scope, RemittanceChannel $channel) use ($member): Result {
             $link = $this->members->findFor((int) $member->getKey());
+            if ($link !== null && $this->channels->storedScope($link->channel_scope) !== $scope) {
+                return Result::fail('当前渠道与原身份绑定不一致', 409);
+            }
             if ($link?->uid === null) {
-                return Result::success(['registered' => false, 'server_date' => now()->toDateString()]);
+                return Result::success(['registered' => false, 'server_date' => now()->toDateString(),
+                    ...($scope === RemittanceChannels::LOCAL ? ['simulated' => true] : [])]);
             }
 
-            $status = $this->client->queryKyc((string) Str::uuid(), $link->uid);
+            $status = $channel->queryKyc((string) Str::uuid(), $link->uid);
             $this->syncState($link, $status);
 
-            return Result::success(['registered' => true, 'server_date' => now()->toDateString(), ...$status]);
+            return Result::success(['registered' => true, 'server_date' => now()->toDateString(), ...$status,
+                ...($scope === RemittanceChannels::LOCAL ? ['simulated' => true] : [])]);
         });
     }
 
@@ -50,12 +56,13 @@ final class MemberKycService
             return Result::fail('雅本用户尚未绑定', 404);
         }
 
-        return $this->withMemberLock((int) $link->member_id, function () use ($uid): Result {
+        return $this->withMemberLock((int) $link->member_id, function (string $scope, RemittanceChannel $channel) use ($uid): Result {
             $current = $this->members->findByUid($uid);
-            if ($current === null) {
+            if ($current === null || $scope !== $this->channels->yabandScope()
+                || $this->channels->storedScope($current->channel_scope) !== $scope) {
                 return Result::fail('雅本用户尚未绑定', 404);
             }
-            $status = $this->client->queryKyc((string) Str::uuid(), $uid);
+            $status = $channel->queryKyc((string) Str::uuid(), $uid);
             $this->syncState($current, $status);
 
             return Result::success();
@@ -65,54 +72,58 @@ final class MemberKycService
     /** 已通过注销审核的账号不再开启或创建上游身份会话。 */
     public function start(User $member): Result
     {
-        $prefix = config('yaband_remit.external_uid_prefix');
-        $redirect = config('yaband_remit.kyc_redirect_url');
-        $notify = config('yaband_remit.kyc_notify_url');
-        if (! is_string($prefix) || ! preg_match('/^[A-Za-z0-9_-]{1,40}$/D', $prefix)
-            || ! $this->validUrl($redirect) || ! $this->validUrl($notify)) {
-            return Result::fail('身份验证暂未开放', 503);
-        }
-        $contact = $member->phone_e164 === null ? ['email' => $member->email] : ['phone' => $member->phone_e164];
-        if ($member->phone_e164 === null && (! filter_var($member->email, FILTER_VALIDATE_EMAIL) || strlen($member->email) > 64)) {
-            return Result::fail('请使用有效的联系方式进行身份验证', 409);
-        }
-
-        return $this->withMemberLock((int) $member->getKey(), function () use ($member, $prefix, $redirect, $notify, $contact): Result {
+        return $this->withMemberLock((int) $member->getKey(), function (string $scope, RemittanceChannel $channel) use ($member): Result {
+            $local = $scope === RemittanceChannels::LOCAL;
+            $prefix = $local ? 'sim' : config('yaband_remit.external_uid_prefix');
+            $redirect = $local ? '' : config('yaband_remit.kyc_redirect_url');
+            $notify = $local ? '' : config('yaband_remit.kyc_notify_url');
+            if (! $local && (! is_string($prefix) || ! preg_match('/^[A-Za-z0-9_-]{1,40}$/D', $prefix)
+                || ! $this->validUrl($redirect) || ! $this->validUrl($notify))) {
+                return Result::fail('身份验证暂未开放', 503);
+            }
+            if (! $local && $member->phone_e164 === null
+                && (! filter_var($member->email, FILTER_VALIDATE_EMAIL) || strlen($member->email) > 64)) {
+                return Result::fail('请使用有效的联系方式进行身份验证', 409);
+            }
             $id = (int) $member->getKey();
             if ($this->closures->approved($id)) {
                 return Result::fail('账号正在注销，暂不能发起身份验证', 409);
             }
-            $link = $this->members->getOrCreate($id);
+            $link = $this->members->getOrCreate($id, $scope);
+            if ($this->channels->storedScope($link->channel_scope) !== $scope) {
+                return Result::fail('当前渠道与原身份绑定不一致', 409);
+            }
             $uid = $link->uid;
             if ($uid === null) {
                 $this->members->rememberExternalUid($link, $prefix.'-'.$id);
-                $uid = $this->client->createMember($link->create_request_id, $notify, [
+                $contact = $member->phone_e164 === null ? ['email' => $member->email] : ['phone' => $member->phone_e164];
+                $uid = $channel->createMember($link->create_request_id, $notify, [
                     'external_uid' => $link->external_uid,
-                    ...$contact,
+                    ...($local ? [] : $contact),
                 ]);
                 $this->members->saveState($link, $uid, null);
             }
 
-            $status = $this->client->queryKyc((string) Str::uuid(), $uid);
+            $status = $channel->queryKyc((string) Str::uuid(), $uid);
             $this->syncState($link, $status);
             if (! $status['can_start_idv']) {
                 return Result::fail('当前状态无法发起身份验证，请先查看认证进度', 409);
             }
-            $url = $this->client->startIdv((string) Str::uuid(), $uid, $redirect, $notify);
+            $url = $channel->startIdv((string) Str::uuid(), $uid, $redirect, $notify);
 
-            return Result::success(['url' => $url]);
+            return Result::success($local ? ['simulated' => true] : ['url' => $url]);
         });
     }
 
     /** 会员锁内重新核对注销状态及IDV资格，再提交资料。 */
     public function submitProfile(User $member, array $profile): Result
     {
-        $notify = config('yaband_remit.kyc_notify_url');
-        if (! $this->validUrl($notify)) {
-            return Result::fail('认证资料提交暂未开放', 503);
-        }
-
-        return $this->withMemberLock((int) $member->getKey(), function () use ($member, $profile, $notify): Result {
+        return $this->withMemberLock((int) $member->getKey(), function (string $scope, RemittanceChannel $channel) use ($member, $profile): Result {
+            $local = $scope === RemittanceChannels::LOCAL;
+            $notify = $local ? '' : config('yaband_remit.kyc_notify_url');
+            if (! $local && ! $this->validUrl($notify)) {
+                return Result::fail('认证资料提交暂未开放', 503);
+            }
             if ($this->closures->approved((int) $member->getKey())) {
                 return Result::fail('账号正在注销，暂不能提交认证资料', 409);
             }
@@ -120,21 +131,25 @@ final class MemberKycService
             if ($link?->uid === null) {
                 return Result::fail('请先发起身份验证', 409);
             }
-            $status = $this->client->queryKyc((string) Str::uuid(), $link->uid);
+            if ($this->channels->storedScope($link->channel_scope) !== $scope) {
+                return Result::fail('当前渠道与原身份绑定不一致', 409);
+            }
+            $status = $channel->queryKyc((string) Str::uuid(), $link->uid);
             // 即使新状态阻止再次提交，也应保存已核对的最新状态并发送一次状态通知。
             $this->syncState($link, $status);
             if (! $status['can_submit_profile']) {
                 return Result::fail('当前状态无法提交认证资料', 409);
             }
 
-            $result = $this->client->submitProfile((string) Str::uuid(), $link->uid, $notify, $profile);
+            $result = $channel->submitProfile((string) Str::uuid(), $link->uid, $notify, $local ? [] : $profile);
             if ((string) ($result['uid'] ?? '') !== $link->uid) {
                 throw new YabandException('雅本资料响应的用户编号不匹配。');
             }
             $status = YabandKycStatus::fromQuery($result);
             $this->syncState($link, $status);
 
-            return Result::success(['registered' => true, 'server_date' => now()->toDateString(), ...$status]);
+            return Result::success(['registered' => true, 'server_date' => now()->toDateString(), ...$status,
+                ...($local ? ['simulated' => true] : [])]);
         });
     }
 
@@ -169,11 +184,14 @@ final class MemberKycService
 
     private function withMemberLock(int $member, callable $action): Result
     {
-        if (! app()->bound(YabandRemitSigner::class)) {
+        try {
+            $scope = $this->channels->activeScope();
+            $channel = $this->channels->resolve($scope);
+        } catch (YabandException) {
             return Result::fail('身份验证暂未开放', 503);
         }
         try {
-            return Cache::lock('yaband-remit:kyc:'.$member, 75)->block(3, $action);
+            return Cache::lock('yaband-remit:kyc:'.$member, 75)->block(3, fn () => $action($scope, $channel));
         } catch (LockTimeoutException) {
             return Result::fail('身份验证请求正在处理，请稍后再试', 409);
         } catch (YabandException $error) {

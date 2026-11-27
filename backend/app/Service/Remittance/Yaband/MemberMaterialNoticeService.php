@@ -7,6 +7,7 @@ use App\Repository\Remittance\YabandMaterialRequestRepository;
 use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Repository\System\UserRepository;
 use App\Service\Notification\MemberNotificationService;
+use App\Service\Remittance\RemittanceChannels;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -24,6 +25,7 @@ final class MemberMaterialNoticeService
         private MemberNotificationService $notices,
         private DatabaseManager $database,
         private MemberMaterialReminder $reminder,
+        private RemittanceChannels $channels,
     ) {}
 
     /** 签名在Controller先核对；此处校验问卷内容并与身份变更、注销共用会员锁。 */
@@ -34,7 +36,8 @@ final class MemberMaterialNoticeService
             return Result::fail('补件通知内容不完整或格式不正确', 422);
         }
         $link = $this->links->findByUid((string) $user->uid);
-        if ($link === null) {
+        $scope = $this->channels->yabandScope();
+        if ($link === null || $this->channels->storedScope($link->channel_scope) !== $scope) {
             return Result::fail('雅本用户尚未绑定', 404);
         }
         $member = (int) $link->member_id;
@@ -43,7 +46,7 @@ final class MemberMaterialNoticeService
             return Result::fail('会员身份或补件通知正在处理，请稍后重试', 409);
         }
         try {
-            $result = $this->database->transaction(fn (): Result => $this->record($member, $user, $data));
+            $result = $this->database->transaction(fn (): Result => $this->record($member, $user, $data, $scope));
             if ($result->isSuccess()) {
                 $this->notices->refreshInbox($member);
             }
@@ -82,11 +85,12 @@ final class MemberMaterialNoticeService
     }
 
     /** 会员行锁内再次核对绑定；相同qno只复用完全相同的任务，不延长或重开旧任务。 */
-    private function record(int $member, stdClass $user, array $data): Result
+    private function record(int $member, stdClass $user, array $data, string $scope): Result
     {
         $account = $this->users->lockMember($member);
         $link = $this->links->findByUid((string) $user->uid);
-        if ($account === null || $link === null || (int) $link->member_id !== $member) {
+        if ($account === null || $link === null || (int) $link->member_id !== $member
+            || $this->channels->storedScope($link->channel_scope) !== $scope) {
             return Result::fail('雅本用户尚未绑定可接收补件的会员', 404);
         }
         if ($account->member_closed_at !== null) {
@@ -100,9 +104,11 @@ final class MemberMaterialNoticeService
         $task = $this->tasks->register($data['qno'], [
             'member_id' => $member, 'order_reference' => null, 'instruction' => $data['q_description'],
             'deadline_at' => $deadline, 'status' => $deadline->lte(now()) ? '6003' : '6001',
+            'channel_scope' => $scope,
         ]);
         if ($task->question_id !== $data['qno'] || $task->member_id !== $member
-            || $task->instruction !== $data['q_description'] || $task->deadline_at->timestamp !== $data['timeout_at']) {
+            || $task->instruction !== $data['q_description'] || $task->deadline_at->timestamp !== $data['timeout_at']
+            || $this->channels->storedScope($task->channel_scope) !== $scope) {
             return Result::fail('补件问题编号已用于不同的任务，请核对通知', 409);
         }
         $this->reminder->send($task, (string) $data['mid']);

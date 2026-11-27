@@ -20,6 +20,17 @@ export function localDateKey(date = new Date()) {
   return `${date.getFullYear()}/${month}/${day}`;
 }
 
+export function formatRemitTimestamp(value: string | number | Date, part: "date" | "time" | "dateTime" = "dateTime") {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  if (part === "date") return localDateKey(date);
+
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const time = `${hours}:${minutes}`;
+  return part === "time" ? time : `${localDateKey(date)} ${time}`;
+}
+
 export function getQuote(amount: string, fee: number, aio: boolean) {
   const [whole, fraction = ""] = amount.split(".");
   const valid = /^\d{1,9}(\.\d{0,2})?$/.test(amount);
@@ -36,7 +47,8 @@ export function getQuote(amount: string, fee: number, aio: boolean) {
 }
 
 export function formatAmount(cents: number) {
-  return (cents / 100).toLocaleString("en-IE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const decimal = (cents / 100).toFixed(2);
+  return decimal.replace(/\B(?=(\d{3})+\.)/g, ",");
 }
 
 export const orderStages = {

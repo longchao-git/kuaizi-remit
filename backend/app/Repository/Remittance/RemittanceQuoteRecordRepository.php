@@ -15,13 +15,14 @@ final class RemittanceQuoteRecordRepository extends AbstractRepository
         return new RemittanceQuoteRecord;
     }
 
-    public function record(int $memberId, array $snapshot): RemittanceQuoteRecord
+    public function record(int $memberId, array $snapshot, ?string $scope = null): RemittanceQuoteRecord
     {
         return $this->query()->create([
             'reference' => (string) Str::uuid(),
             'member_id' => $memberId,
             'revision_id' => $snapshot['rule_revision_id'],
             'snapshot' => $snapshot,
+            'channel_scope' => $scope,
         ]);
     }
 

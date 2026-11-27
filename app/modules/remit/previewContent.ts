@@ -89,13 +89,30 @@ export const notifications: PreviewNotification[] = [
 ];
 
 export const faq = [
-  { icon: "时", title: "汇款多久能到账？", answer: "报价页会显示预计到账时间，实际进度可在订单详情查看。" },
+  {
+    icon: "时",
+    title: "汇款多久能到账？",
+    summary: "在报价页和订单详情查看",
+    answer: "报价页会显示预计到账时间，实际进度可在订单详情查看。",
+  },
+  {
+    icon: "率",
+    title: "优惠汇率和参考汇率有什么区别？",
+    summary: "到账报价以汇款确认页为准",
+    answer: "优惠汇率用于计算本笔汇款的报价到账金额，参考汇率用于比较。请以汇款确认页显示的报价为准。",
+  },
+  {
+    icon: "费",
+    title: "付款通道费用如何计算？",
+    summary: "查看各付款方式的费用和合计",
+    answer: "选择付款方式时可以查看费用明细和本笔合计付款金额。",
+  },
   {
     icon: "审",
     title: "如何补充资金来源证明？",
+    summary: "查看通知并按要求提交资料",
     answer: "收到补件通知后，查看对应补件要求，再按页面提示提交资料。",
   },
-  { icon: "费", title: "付款通道费用如何计算？", answer: "选择付款方式时可以查看费用明细和本笔合计付款金额。" },
 ];
 
 export interface PreviewSetting {
@@ -140,6 +157,7 @@ export const statusIcons: Partial<Record<number, { symbol: string; tone: string 
   31: { symbol: "✓", tone: "good" },
 };
 
-export const documentIcons = ["TIE", "护", "EU"];
+export const documentIcons = ["NIE", "护", "EU"];
+export const documentDescriptions = ["需拍摄正面和背面", "拍摄含照片与个人信息的页面", "需拍摄正面和背面"];
 export const paymentIcons = ["€", "Pay", "卡"];
 export const uploadChecks = ["资料属于本人且真实有效", "文字清晰，无裁切或遮挡", "与本次汇款用途一致"];

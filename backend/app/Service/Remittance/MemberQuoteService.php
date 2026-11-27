@@ -10,7 +10,6 @@ use App\Model\Remittance\RemittanceQuoteRecord;
 use App\Repository\Remittance\RemittanceCouponRepository;
 use App\Repository\Remittance\RemittanceOrderRepository;
 use App\Repository\Remittance\RemittanceQuoteRecordRepository;
-use App\Service\Remittance\Yaband\Contract\YabandRateLock;
 use App\Service\Remittance\Yaband\YabandException;
 use App\Service\Remittance\Yaband\YabandReferenceRateService;
 use Illuminate\Container\Attributes\Singleton;
@@ -27,6 +26,7 @@ final class MemberQuoteService
         private RemittanceOrderRepository $orders,
         private RemittanceQuoteRecordRepository $records,
         private YabandReferenceRateService $referenceRates,
+        private RemittanceChannels $channels,
     ) {}
 
     /** 按所选渠道报价，并保存费用和实际锁汇状态。 */
@@ -46,13 +46,13 @@ final class MemberQuoteService
             }
         }
 
-        $locked = null;
-        if (app()->bound(YabandRateLock::class)) {
-            try {
-                $locked = app(YabandRateLock::class)->lock($member, $input);
-            } catch (YabandException) {
-                return Result::fail('当前无法锁定汇率，请稍后再试。', ErrorCode::QUOTE_UNAVAILABLE);
-            }
+        try {
+            $scope = $this->channels->activeScope();
+            $locked = $this->channels->rateLock($scope)?->lock($member, $input);
+        } catch (YabandException) {
+            return Result::fail('当前汇款渠道无法锁定汇率，请核对配置或稍后再试。', ErrorCode::QUOTE_UNAVAILABLE);
+        }
+        if ($locked !== null) {
             if (! is_string($locked['reference'] ?? null) || trim($locked['reference']) === '' || strlen($locked['reference']) > 200
                 || ! is_int($locked['expires_at'] ?? null) || $locked['expires_at'] <= now()->timestamp
                 || ! is_int($locked['rate_ten_thousandths'] ?? null)) {
@@ -90,12 +90,13 @@ final class MemberQuoteService
             'coupon_id' => $coupon?->id,
             ...($referenceRate === null ? [] : ['rate_source' => 'yaband_reference', 'reference_rate_observed_at' => $referenceRate['observed_at']]),
             ...($locked === null ? [] : ['provider_lock_reference' => $locked['reference'], 'expires_at' => $locked['expires_at']]),
-        ]);
+        ], $scope);
         $clientQuote = $record->snapshot;
         unset($clientQuote['source_rate_ten_thousandths'], $clientQuote['spread_basis_points'], $clientQuote['provider_lock_reference']);
 
         return Result::success([
             ...$clientQuote,
+            ...($scope === RemittanceChannels::LOCAL ? ['simulated' => true] : []),
             'record_no' => $record->reference,
         ]);
     }

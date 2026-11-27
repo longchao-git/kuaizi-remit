@@ -1,32 +1,34 @@
 <template>
   <view class="inbox">
-    <view class="line inbox-actions">
-      <button class="inline-action accent" :disabled="busy" @tap="load(1)">刷新</button>
-      <button class="inline-action accent" :disabled="busy || !latest || !unread" @tap="markAll">全部已读</button>
-    </view>
     <text v-if="busy" class="description" role="status">处理中…</text>
     <text v-else-if="error" class="description offer" role="alert">{{ error }}</text>
     <text v-else-if="!displayed.length" class="description">暂无消息</text>
 
-    <template v-for="{ item, dateLabel } in datedNotices" :key="item.reference ?? item.id">
+    <template v-for="{ item, icon, dateLabel, timeLabel } in datedNotices" :key="item.reference ?? item.id">
       <text v-if="dateLabel" class="inbox-date">{{ dateLabel }}</text>
       <view class="card inbox-item">
-        <view class="inbox-icon" :class="{ 'order-icon': item.order_reference }">
-          <image :src="item.order_reference ? '/static/remit/tab-orders.svg' : '/static/remit/mail.svg'" mode="aspectFit" />
-        </view>
-        <view class="inbox-copy">
-          <view class="line">
+        <button
+          class="inbox-entry"
+          :aria-label="item.read_at ? undefined : '未读：' + item.title"
+          :disabled="busy"
+          @tap="openNotice(item)"
+        >
+          <view class="inbox-icon" :class="'inbox-icon--' + icon" aria-hidden="true">
+            <view v-if="icon === 'arrival'" class="inbox-check" />
+            <text v-else-if="icon === 'payment'" class="inbox-symbol">€</text>
+            <text v-else-if="icon === 'security'" class="inbox-symbol">!</text>
+            <image v-else :src="noticeImages[icon]" mode="aspectFit" />
+          </view>
+          <view class="inbox-copy">
             <text class="inbox-title">{{ item.title }}</text>
-            <text v-if="!item.read_at" class="inbox-unread">未读</text>
+            <text class="inbox-body">{{ item.body }}</text>
+            <text class="inbox-time">{{ timeLabel }}</text>
           </view>
-          <text class="inbox-body">{{ item.body }}</text>
-          <text class="inbox-time">{{ formatTime(item.created_at) }}</text>
-          <view v-if="!item.read_at || item.support_ticket_id || item.order_reference || item.material_reference" class="inbox-item-actions">
-            <button v-if="item.support_ticket_id" class="inline-action accent" :disabled="busy" @tap="openTicket(item)">查看工单</button>
-            <button v-if="item.order_reference" class="inline-action accent" :disabled="busy" @tap="openOrder(item)">查看订单</button>
-            <button v-if="item.material_reference" class="inline-action accent" :disabled="busy" @tap="openMaterial(item)">查看补件</button>
-            <button v-if="!item.read_at" class="inline-action accent" :disabled="busy" @tap="mark(item.reference ?? item.id)">标为已读</button>
-          </view>
+          <view v-if="!item.read_at" class="inbox-unread" aria-hidden="true" />
+        </button>
+        <view v-if="hasExtraLink(item)" class="inbox-item-actions">
+          <button v-if="item.material_reference && item.support_ticket_id" class="inline-action accent" :disabled="busy" @tap="openTicket(item)">查看工单</button>
+          <button v-if="item.order_reference" class="inline-action accent" :disabled="busy" @tap="openOrder(item)">查看订单</button>
         </view>
       </view>
     </template>
@@ -35,13 +37,14 @@
       <text class="description">{{ page }} / {{ pages }}</text>
       <button class="inline-action accent" :disabled="busy || page >= pages" @tap="load(page + 1)">下一页</button>
     </view>
+    <button class="inline-action accent inbox-refresh" :disabled="busy" @tap="load(1)">刷新</button>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
-import { localDateKey } from './previewOrder';
+import { formatRemitTimestamp, localDateKey } from './previewOrder';
 
 type Notice = {
   id: number;
@@ -55,6 +58,16 @@ type Notice = {
   material_reference?: string | null;
 };
 type NoticePage = { list: Notice[]; unread_count: number; page: number; total_pages: number };
+const noticeImages = {
+  refund: '/static/remit/status-refund.svg',
+  warning: '/static/remit/status-warning.svg',
+  coupon: '/static/remit/coupon.svg',
+  ticket: '/static/remit/support.svg',
+  document: '/static/remit/document.svg',
+  message: '/static/remit/mail.svg',
+} as const;
+type NoticeIcon = keyof typeof noticeImages | 'arrival' | 'payment' | 'security';
+
 const emit = defineEmits<{ expired: []; unread: [count: number]; ticket: [id: string]; order: [reference: string]; material: [reference: string] }>();
 const props = defineProps<{ targetNotice?: string }>();
 const items = ref<Notice[]>([]);
@@ -73,10 +86,14 @@ const datedNotices = computed(() => {
   const yesterdayKey = localDateKey(yesterday);
   let previous = '';
   return displayed.value.map(item => {
-    const date = localDateKey(new Date(item.created_at));
+    const createdAt = new Date(item.created_at);
+    const date = localDateKey(createdAt);
     const dateLabel = date === previous ? '' : date === todayKey ? '今天' : date === yesterdayKey ? '昨天' : date;
+    const timeLabel = date === todayKey
+      ? formatRemitTimestamp(createdAt, 'time')
+      : `${createdAt.getMonth() + 1}/${createdAt.getDate()}`;
     previous = date;
-    return { item, dateLabel };
+    return { item, icon: noticeIcon(item), dateLabel, timeLabel };
   });
 });
 const page = ref(1);
@@ -85,6 +102,7 @@ const latest = ref<string | number>();
 const unread = ref(0);
 const busy = ref(false);
 const error = ref('');
+const canMarkAll = computed(() => !busy.value && latest.value !== undefined && unread.value > 0);
 const options = { handleUnauthorized: false };
 let reloadPending = false;
 let targetPending: string | undefined;
@@ -157,7 +175,7 @@ function refresh() {
   else void load(page.value);
 }
 
-defineExpose({ refresh });
+defineExpose({ refresh, markAll, canMarkAll });
 
 function mark(id: number | string, through = false) {
   return run(async () => {
@@ -174,7 +192,36 @@ function mark(id: number | string, through = false) {
 }
 
 function markAll() {
-  if (latest.value !== undefined) void mark(latest.value, true);
+  if (canMarkAll.value && latest.value !== undefined) void mark(latest.value, true);
+}
+
+function noticeIcon(item: Notice): NoticeIcon {
+  if (item.material_reference) return 'document';
+  if (item.support_ticket_id) return 'ticket';
+  if (item.order_reference) {
+    if (item.title === '汇款订单已退款') return 'refund';
+    if (item.title === '已确认收到汇款付款') return 'payment';
+    if (/已下发|已到账/.test(item.title)) return 'arrival';
+    if (/异常|处理失败/.test(item.title)) return 'warning';
+    return 'document';
+  }
+  if (/^(安全提醒|风险提醒)(?:$|[：: ·])/.test(item.title)) return 'security';
+  if (/^(优惠券|费用优惠)|手续费(?:半价|优惠)/.test(item.title)) return 'coupon';
+  return 'message';
+}
+
+function hasExtraLink(item: Notice): boolean {
+  return Boolean(
+    (item.order_reference && (item.material_reference || item.support_ticket_id))
+    || (item.material_reference && item.support_ticket_id),
+  );
+}
+
+function openNotice(item: Notice) {
+  if (item.material_reference) openMaterial(item);
+  else if (item.support_ticket_id) openTicket(item);
+  else if (item.order_reference) openOrder(item);
+  else if (!item.read_at) void mark(item.reference ?? item.id);
 }
 
 async function markLinkedRead(item: Notice) {
@@ -213,10 +260,6 @@ function openMaterial(item: Notice) {
   });
 }
 
-function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
 watch(() => props.targetNotice, (target) => {
   if (target) void openPush(target);
 });
@@ -232,17 +275,104 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-.inbox { display: grid; align-content: start; gap: 18rpx; padding: 24rpx 32rpx; }
-.inbox-date { padding: 8rpx 0 0; color: #6d7180; font-size: 24rpx; }
-.inbox-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18rpx; padding: 22rpx; }
-.inbox-icon { display: grid; place-items: center; width: 64rpx; height: 64rpx; background: #eeebff; border-radius: 20rpx; }
-.inbox-icon.order-icon { background: #e7f7ef; }
-.inbox-icon image { width: 34rpx; height: 34rpx; }
-.inbox-copy { display: grid; gap: 8rpx; min-width: 0; }
-.inbox-title { font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
-.inbox-unread { flex-shrink: 0; color: #5243cb; font-size: 22rpx; }
-.inbox-body { color: #5d6170; font-size: 24rpx; white-space: pre-wrap; overflow-wrap: anywhere; }
-.inbox-time { color: #6d7180; font-size: 22rpx; }
-.inbox-item-actions { display: flex; gap: 18rpx; flex-wrap: wrap; }
-.inbox-actions { gap: 12rpx; }
+.inbox {
+  display: grid;
+  align-content: start;
+  gap: 24rpx;
+  padding: 44rpx 40rpx 32rpx;
+}
+.inbox-date {
+  padding-top: 20rpx;
+  color: #6d7180;
+  font-size: 22rpx;
+  font-weight: 500;
+}
+.inbox-item {
+  border: 1.5rpx solid #e6e6ee;
+  border-radius: 36rpx;
+  box-shadow: 0 2rpx 4rpx rgba(31, 35, 48, 0.035);
+}
+.inbox-entry,
+.inbox-entry[disabled] {
+  display: grid;
+  grid-template-columns: 86rpx minmax(0, 1fr) 16rpx;
+  align-items: center;
+  gap: 22rpx;
+  width: 100%;
+  min-height: 166rpx;
+  padding: 22rpx 32rpx;
+  color: #111318;
+  background: transparent;
+  text-align: left;
+  line-height: 1.45;
+}
+.inbox-icon {
+  display: grid;
+  place-items: center;
+  width: 86rpx;
+  height: 86rpx;
+  border-radius: 30rpx;
+  background: #eeebff;
+}
+.inbox-icon--arrival {
+  background: #e7f7ef;
+}
+.inbox-icon--warning,
+.inbox-icon--coupon {
+  background: #fff0f1;
+}
+.inbox-icon--refund {
+  background: #fff1e6;
+}
+.inbox-check {
+  width: 16rpx;
+  height: 30rpx;
+  border: solid #329c65;
+  border-width: 0 6rpx 6rpx 0;
+  border-radius: 3rpx;
+  transform: translateY(-4rpx) rotate(40deg);
+}
+.inbox-icon image {
+  width: 40rpx;
+  height: 40rpx;
+}
+.inbox-symbol {
+  color: var(--remit-accent);
+  font-size: 40rpx;
+  font-weight: 700;
+}
+.inbox-copy {
+  display: grid;
+  gap: 3rpx;
+  min-width: 0;
+}
+.inbox-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.inbox-unread {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: var(--remit-accent);
+}
+.inbox-body,
+.inbox-time {
+  color: #6d7180;
+  font-size: 21rpx;
+}
+.inbox-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.inbox-item-actions {
+  display: flex;
+  gap: 18rpx;
+  flex-wrap: wrap;
+  margin: 0 30rpx 12rpx 138rpx;
+}
+.inbox-refresh {
+  justify-self: start;
+}
 </style>

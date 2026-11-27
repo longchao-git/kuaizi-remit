@@ -18,7 +18,7 @@
       <view v-for="update in detail.updates" :key="update.version" class="card ticket-card">
         <view class="line"><text>客服回复</text><text class="pill">{{ labels[update.status] }}</text></view>
         <text class="ticket-body">{{ update.reply }}</text>
-        <text class="description">{{ new Date(update.created_at).toLocaleString() }}</text>
+        <text class="description">{{ formatRemitTimestamp(update.created_at) }}</text>
       </view>
       <button class="inline-action accent" :disabled="busy" @tap="open(detail.id)">刷新进度</button>
     </template>
@@ -30,7 +30,7 @@
       <text v-if="!busy && !error && !items.length" class="description">暂无客服工单</text>
       <button v-for="item in items" :key="item.id" class="card ticket-card ticket-row" :disabled="busy" @tap="open(item.id)">
         <view class="line"><text class="ticket-subject">{{ item.subject }}</text><text class="pill">{{ labels[item.status] }}</text></view>
-        <text class="description">工单 #{{ item.id }} · {{ new Date(item.created_at).toLocaleDateString() }}</text>
+        <text class="description">工单 #{{ item.id }} · {{ formatRemitTimestamp(item.created_at, 'date') }}</text>
       </button>
       <view v-if="pages > 1" class="line">
         <button class="inline-action" :disabled="busy || page <= 1" @tap="load(page - 1)">上一页</button>
@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatRemitTimestamp } from './previewOrder';
 import { onMounted, onUnmounted, ref } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
 import { makeMessageId } from './useSupportChat';

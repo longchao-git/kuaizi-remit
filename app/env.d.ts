@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_REMIT_SMS_AUTOFILL?: string;
   readonly VITE_REMIT_PUSH_ENABLED?: string;
   readonly VITE_REMIT_DEMO?: string;
+  readonly VITE_REMIT_DEVICE_SIGNING?: string;
   readonly VITE_REVERB_URL?: string;
   readonly VITE_REVERB_APP_KEY?: string;
 }

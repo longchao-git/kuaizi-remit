@@ -4,6 +4,7 @@ namespace App\Repository\System;
 
 use App\Model\System\User;
 use App\Repository\AbstractRepository;
+use App\Service\System\PhoneLookup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -95,16 +96,17 @@ final class UserRepository extends AbstractRepository
         if (ctype_digit($keyword)) {
             $id = filter_var($keyword, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             $query->whereKey($id === false ? 0 : $id);
+        } elseif (preg_match('/^\+34[67][0-9]{8}$/D', $keyword) === 1) {
+            $query->where('phone_lookup', app(PhoneLookup::class)->digest($keyword));
         } elseif ($keyword !== '') {
             $pattern = '%'.strtr($keyword, ['!' => '!!', '%' => '!%', '_' => '!_']).'%';
             $query->where(function (Builder $search) use ($pattern): void {
                 $search->whereRaw("LOWER(name) LIKE LOWER(?) ESCAPE '!'", [$pattern])
-                    ->orWhereRaw("LOWER(email) LIKE LOWER(?) ESCAPE '!'", [$pattern])
-                    ->orWhereRaw("phone_e164 LIKE ? ESCAPE '!'", [$pattern]);
+                    ->orWhereRaw("LOWER(email) LIKE LOWER(?) ESCAPE '!'", [$pattern]);
             });
         }
 
-        return $query->select(['id', 'name', 'email', 'phone_e164', 'created_at'])->orderByDesc('id')->paginate(20, page: $page);
+        return $query->select(['id', 'name', 'email', 'phone_cipher', 'created_at'])->orderByDesc('id')->paginate(20, page: $page);
     }
 
     public function createLocalMember(string $email, string $password): void
@@ -140,7 +142,7 @@ final class UserRepository extends AbstractRepository
     /** 手机号为独立唯一标识，旧表必填邮箱保留为内部值。 */
     public function findOrRegisterMobile(string $mobile): User
     {
-        return $this->query()->firstOrCreate(['phone_e164' => $mobile], [
+        return $this->createMobileMember($mobile, [
             'name' => '会员 '.substr($mobile, -4),
             'email' => Str::uuid().'@mobile.invalid',
             'password' => Str::random(64),
@@ -150,11 +152,19 @@ final class UserRepository extends AbstractRepository
     /** 仅创建专用测试会员，已有号码不修改身份，由调用方核对测试邮箱。 */
     public function findOrRegisterTestMobile(string $mobile, string $email): User
     {
-        return $this->query()->firstOrCreate(['phone_e164' => $mobile], [
+        return $this->createMobileMember($mobile, [
             'name' => 'App 测试会员',
             'email' => $email,
             'password' => Str::random(64),
         ]);
+    }
+
+    /** 只通过 HMAC 唯一索引匹配，密文由 User 模型创建。 */
+    private function createMobileMember(string $mobile, array $attributes): User
+    {
+        $lookup = app(PhoneLookup::class)->digest($mobile);
+
+        return $this->query()->where('phone_lookup', $lookup)->firstOrCreate([], ['phone_e164' => $mobile, ...$attributes]);
     }
 
     public function startMemberSession(User $user, string $name): NewAccessToken

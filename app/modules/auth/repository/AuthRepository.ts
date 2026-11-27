@@ -1,4 +1,5 @@
 import request from '@/request/http';
+import { deviceLoginFields } from '@/request/device-signature';
 import type { CurrentUser } from '@/modules/profile/domain/CurrentUser';
 import type { LoginForm } from '../domain/LoginForm';
 import type { LoginResponse } from '../domain/LoginResponse';
@@ -16,7 +17,7 @@ export class AuthRepository {
   }
 
   async loginLocal(email: string, password: string): Promise<{ token: string; member: CurrentUser }> {
-    return await request.post(`${this.basePath}/local-login`, { email, password }, { handleUnauthorized: false });
+    return await request.post(`${this.basePath}/local-login`, { email, password, ...deviceLoginFields() }, { handleUnauthorized: false });
   }
 
   async current(): Promise<CurrentUser> {
@@ -32,7 +33,7 @@ export class AuthRepository {
   }
 
   async loginRemitSms(mobile: string, code: string): Promise<{ token: string; member: CurrentUser }> {
-    return await request.post(this.basePath + '/sms-login', { mobile, code }, { handleUnauthorized: false });
+    return await request.post(this.basePath + '/sms-login', { mobile, code, ...deviceLoginFields() }, { handleUnauthorized: false });
   }
 
   async sendSms(mobile: string): Promise<SmsSendResult> {

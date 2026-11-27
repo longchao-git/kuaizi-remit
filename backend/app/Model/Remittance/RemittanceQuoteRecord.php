@@ -10,11 +10,12 @@ use Illuminate\Support\Carbon;
  * @property string $reference
  * @property int $member_id
  * @property array $snapshot
+ * @property string|null $channel_scope
  * @property array|null $declaration
  * @property Carbon $created_at
  * @property Carbon|null $draft_saved_at
  */
-#[Fillable(['reference', 'member_id', 'revision_id', 'snapshot'])]
+#[Fillable(['reference', 'member_id', 'revision_id', 'snapshot', 'channel_scope'])]
 final class RemittanceQuoteRecord extends Model
 {
     protected $table = 'remittance_quote_records';

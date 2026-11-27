@@ -11,7 +11,7 @@ use App\Repository\Remittance\YabandRemitMemberRepository;
 use App\Service\Notification\MemberNotificationService;
 use App\Service\Remittance\Yaband\YabandException;
 use App\Service\Remittance\Yaband\YabandFailureMessage;
-use App\Service\Remittance\Yaband\YabandRemitClient;
+use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -25,7 +25,7 @@ final class RemittanceOrderService
     /** 复用本地订单、供应商查询及通知，资金状态仅在核对后保存。 */
     public function __construct(
         private RemittanceOrderRepository $orders,
-        private YabandRemitClient $yaband,
+        private RemittanceChannels $channels,
         private MemberNotificationService $notices,
         private DatabaseManager $database,
         private RemittanceCouponRepository $coupons,
@@ -43,6 +43,17 @@ final class RemittanceOrderService
         }
 
         return Result::success($payload);
+    }
+
+    /** 按西班牙本地自然月统计本人下单后已下发的本金，渠道额度尚无可展示数据。 */
+    public function memberSummary(int $member): array
+    {
+        $month = CarbonImmutable::now('Europe/Madrid')->startOfMonth();
+
+        return [
+            'monthly_sent_principal_minor' => $this->orders->memberSentPrincipal($member, $month->utc(), $month->addMonth()->utc()),
+            'remaining_limit_minor' => null,
+        ];
     }
 
     /** 会员只能读取自己的订单和当前可用付款信息。 */
@@ -80,7 +91,8 @@ final class RemittanceOrderService
             return Result::fail('交易标识无效', 422);
         }
         $order = $this->orders->find(strtolower($reference), null);
-        if ($order === null || $order->provider_trade_id !== $trade) {
+        if ($order === null || $order->provider_trade_id !== $trade
+            || $this->channels->storedScope($order->channel_scope) !== $this->channels->yabandScope()) {
             return Result::fail('交易尚未关联本地订单', 404);
         }
 
@@ -121,7 +133,9 @@ final class RemittanceOrderService
             }
 
             $this->orders->markSyncAttempt($order);
-            $reply = $this->yaband->queryTransaction((string) Str::uuid(), $order->provider_trade_id, $order->white_label);
+            $scope = $this->channels->storedScope($order->channel_scope);
+            $channel = $this->channels->resolve($scope);
+            $reply = $channel->queryTransaction((string) Str::uuid(), $order->provider_trade_id, $order->white_label);
             $transaction = $reply['transaction_info'] ?? null;
             if (! is_array($transaction) || ($transaction['order_id'] ?? null) !== $order->reference
                 || ($transaction['trade_id'] ?? null) !== $order->provider_trade_id) {
@@ -130,9 +144,9 @@ final class RemittanceOrderService
 
             if (array_key_exists('uid', $transaction)) {
                 $providerUid = $transaction['uid'];
-                $memberUid = $this->members->findFor((int) $order->member_id)?->uid;
-                if ((! is_string($providerUid) && ! is_int($providerUid)) || $memberUid === null
-                    || (string) $providerUid !== $memberUid) {
+                $link = $this->members->findFor((int) $order->member_id);
+                if ((! is_string($providerUid) && ! is_int($providerUid)) || $link?->uid === null
+                    || $this->channels->storedScope($link->channel_scope) !== $scope || (string) $providerUid !== $link->uid) {
                     return Result::fail('雅本返回的用户与订单不匹配', 502);
                 }
             }
@@ -145,6 +159,9 @@ final class RemittanceOrderService
             $refund = $transaction['refund_status_code'] ?? null;
             if (! $this->supportedState($income, $outgoing, $refund)) {
                 return Result::fail('无法识别雅本返回的订单状态，请查询核实', 502);
+            }
+            if ($this->contradictsVerifiedState($order, $income, $outgoing, $refund)) {
+                return Result::fail('查询结果与已确认的资金进度冲突，需人工核对', 409);
             }
             $this->saveState($order, $income, $outgoing, $refund);
 
@@ -176,6 +193,14 @@ final class RemittanceOrderService
         return in_array($income, ['00', '01', '02', '03', '04', '05', '06', '07', '08'], true)
             && in_array($outgoing, ['01', '02', '03', '04', '05', '06', '07'], true)
             && in_array($refund, ['00', '01', '02', '03', '04', '05', '06', '07'], true);
+    }
+
+    /** 避免旧查询结果回退已确认事实；允许独立的退款进度继续推进。 */
+    private function contradictsVerifiedState(RemittanceOrder $order, string $income, string $outgoing, string $refund): bool
+    {
+        return ($order->refund_code === '04' && $refund !== '04')
+            || ($order->income_code === '00' && $income !== '00' && $refund === '00')
+            || ($order->outgoing_code === '05' && $outgoing !== '05' && $refund === '00');
     }
 
     /** 同一事务同步订单及券，仅对核实后的关键状态变化发送一次消息。 */
@@ -212,6 +237,7 @@ final class RemittanceOrderService
     {
         $result = [
             'reference' => $order->reference,
+            ...($order->channel_scope === RemittanceChannels::LOCAL ? ['simulated' => true] : []),
             'can_refresh' => is_string($order->provider_trade_id) && $order->provider_trade_id !== '',
             'declaration' => $order->declaration,
             'principal_minor' => (int) $order->principal_minor,
