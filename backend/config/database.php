@@ -3,6 +3,8 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$localRemittance = env('APP_ENV') === 'local' && env('REMIT_CHANNEL') === 'local';
+
 return [
 
     /*
@@ -38,10 +40,11 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
+            'busy_timeout' => $localRemittance ? 5000 : null,
             'journal_mode' => null,
             'synchronous' => null,
-            'transaction_mode' => 'DEFERRED',
+            // 模拟渠道在事务开始时等待写锁，避免读取会员后创建令牌时升级锁失败。
+            'transaction_mode' => $localRemittance ? 'IMMEDIATE' : 'DEFERRED',
         ],
 
         'mysql' => [
