@@ -34,6 +34,26 @@ final class MemberPushTest extends TestCase
         Http::fake([self::BRIDGE => Http::response(['accepted' => true])]);
     }
 
+    public function test_repeated_device_registration_keeps_the_encrypted_binding_and_repairs_damaged_data(): void
+    {
+        $this->login(User::factory()->create());
+        $input = ['client_id' => 'fixture-device'];
+        $this->putJson(self::PATH, $input)->assertOk();
+        $first = DB::table('member_push_devices')->sole();
+
+        $this->travel(2)->seconds();
+        $this->putJson(self::PATH, $input)->assertOk();
+        $unchanged = DB::table('member_push_devices')->sole();
+        $this->assertSame($first->client_id, $unchanged->client_id);
+        $this->assertSame($first->updated_at, $unchanged->updated_at);
+
+        DB::table('member_push_devices')->where('id', $first->id)->update(['client_id' => 'damaged-fixture']);
+        $this->putJson(self::PATH, $input)->assertOk();
+        $repaired = DB::table('member_push_devices')->sole();
+        $this->assertSame($first->id, $repaired->id);
+        $this->assertSame($input['client_id'], decrypt($repaired->client_id, false));
+    }
+
     public function test_push_only_queues_once_and_only_exposes_a_notice_identifier(): void
     {
         $member = User::factory()->create();

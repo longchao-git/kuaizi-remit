@@ -5,6 +5,7 @@ namespace App\Repository\Notification;
 use App\Model\Notification\MemberPushDevice;
 use App\Repository\AbstractRepository;
 use App\Service\System\MemberSessionService;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Crypt;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -21,6 +22,17 @@ final class MemberPushDeviceRepository extends AbstractRepository
     {
         PersonalAccessToken::query()->lockForUpdate()->findOrFail($token);
         $key = hash('sha256', $cid);
+
+        try {
+            $registered = $this->query()->where('token_id', $token)->where('member_id', $member)
+                ->where('client_hash', $key)->value('client_id');
+            if ($registered === $cid) {
+                return;
+            }
+        } catch (DecryptException) {
+            // 设备重新登记时修复无法解密的历史绑定。
+        }
+
         $this->query()->where('token_id', $token)->where('client_hash', '!=', $key)->delete();
         $this->query()->upsert([[
             'client_hash' => $key, 'member_id' => $member, 'token_id' => $token, 'client_id' => Crypt::encryptString($cid),
