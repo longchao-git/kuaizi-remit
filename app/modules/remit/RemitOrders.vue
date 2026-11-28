@@ -1,5 +1,5 @@
 <template>
-  <view class="body order-list" :class="{ 'figma-order-page': usesFigmaSurface }">
+  <view :key="detail?.reference ?? 'list'" class="body order-list" :class="{ 'figma-order-page': usesFigmaSurface }">
     <view v-if="!detail && !detailOnly" class="order-filters" role="group" aria-label="订单状态筛选">
       <button
         v-for="filter in filters" :key="filter.value" class="order-filter"
@@ -8,8 +8,7 @@
       >{{ filter.label }}</button>
     </view>
     <text v-if="error" class="description offer" role="alert">{{ error }}</text>
-    <text v-else-if="busy" class="description">正在读取…</text>
-    <text v-else-if="!detailOnly && !items.length && !detail" class="description">
+    <text v-else-if="hasLoaded && !busy && !detailOnly && !items.length && !detail" class="description">
       {{ selectedFilter === 'all' ? '暂无汇款订单' : '暂无该状态的汇款订单' }}
     </text>
     <view v-if="detail" class="order-detail" :class="{ 'standard-detail': standardDetail }">
@@ -198,6 +197,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRemitLoading } from './useRemitLoading';
 import request, { UnauthorizedError } from '@/request/http';
 import { getErrorMessage } from '@/shared/utils/error';
 import { formatAmount, formatRemitTimestamp } from './previewOrder';
@@ -279,6 +279,9 @@ const detailTitle = computed(() => {
 const processingSteps = ['订单已创建', '已确认收到付款', '汇款处理中', '人民币下发', '到账确认'];
 const error = ref('');
 const busy = ref(false);
+const foregroundBusy = ref(false);
+const hasLoaded = ref(false);
+useRemitLoading(() => foregroundBusy.value && props.pageVisible);
 const page = ref(1);
 const pages = ref(0);
 let active = true;
@@ -329,7 +332,7 @@ async function refreshDetail(automatic = false) {
     if (!active || detail.value?.reference !== reference) return;
     detail.value = fresh;
     succeeded = true;
-  });
+  }, !automatic);
   if (automatic && succeeded && canAutoRefresh() && detail.value && unsettled(detail.value) && remainingPolls > 0) {
     remainingPolls -= 1;
     poll = setTimeout(() => { void refreshDetail(true); }, 12000);
@@ -346,10 +349,11 @@ function isRefund(order: Order): boolean {
   return ['01', '02', '03', '04', '05', '06', '07'].includes(order.refund_code ?? '');
 }
 
-async function run(action: () => Promise<void>) {
+async function run(action: () => Promise<void>, showLoading = true) {
   if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
+  foregroundBusy.value = showLoading;
   try {
     await action();
   } catch (reason) {
@@ -357,6 +361,7 @@ async function run(action: () => Promise<void>) {
     if (reason instanceof UnauthorizedError && active) emit('expired');
     else error.value = getErrorMessage(reason, '读取订单失败，请稍后重试');
   } finally {
+    foregroundBusy.value = false;
     busy.value = false;
     if (returnQueued && canAutoRefresh()) returned();
   }
@@ -370,6 +375,7 @@ function load(next: number) {
     if (!active) return;
     if (filter !== 'all' && result.status_filter !== filter) throw new Error('当前服务暂不支持订单状态筛选');
     items.value = result.list;
+    hasLoaded.value = true;
     page.value = result.page;
     pages.value = result.total_pages;
   });

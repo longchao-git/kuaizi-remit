@@ -1,6 +1,6 @@
 <template>
   <view
-    class="remit"
+    class="remit remit-session"
     :class="{ 'remit-home': onHome, 'remit-figma-surface': usesFigmaSurface, 'remit-reference-surface': usesReferenceSurface }"
     data-mode="local-session"
     :data-screen="chatOpen ? 36 : undefined"
@@ -37,18 +37,20 @@
         :disabled="!inbox?.canMarkAll" @tap="inbox?.markAll()">全部已读</button>
     </view>
 
-    <RemitInbox v-if="inboxOpen" v-show="!ordersOpen && !ticketsOpen && !materialsOpen" ref="inbox" :target-notice="targetNotice" @expired="expire"
+    <RemitInbox
+      v-if="inboxOpen" v-show="inboxVisible" ref="inbox" class="session-content"
+      :page-visible="props.pageVisible && inboxVisible" :target-notice="targetNotice" @expired="expire"
       @unread="inboxCount = $event" @ticket="openTicket" @order="openNoticeOrder" @material="openNoticeMaterial" />
-    <RemitHelp v-if="helpOpen" v-show="!chatOpen" @contact="chatOpen = true" />
+    <RemitHelp v-if="helpOpen" v-show="!chatOpen" class="session-content" @contact="chatOpen = true" />
 
-    <view v-if="!member && props.allowLocalLogin" class="body auth">
+    <view v-if="!member && props.allowLocalLogin" class="body auth session-content">
       <text class="heading">测试账号登录</text>
       <text class="description">仅用于本地联调。</text>
       <view class="phone card"><input v-model="email" placeholder="请输入测试邮箱" aria-label="测试邮箱" /></view>
       <view class="phone card"><input v-model="password" password placeholder="请输入密码" aria-label="密码" /></view>
     </view>
 
-    <view v-else-if="paymentEditor" class="payout-selection payment-editor">
+    <view v-else-if="paymentEditor" class="payout-selection payment-editor session-content">
       <view class="payout-selection-content">
         <view class="payout-selection-options" role="group" aria-label="付款方式">
           <button v-for="method in paymentOptions" :key="method.value" class="card payout-selection-option"
@@ -74,7 +76,7 @@
       </view>
       <view class="footer"><button class="primary" @tap="savePaymentMethod">使用此付款方式</button></view>
     </view>
-    <view v-else-if="declarationEditor" class="payout-selection declaration-editor">
+    <view v-else-if="declarationEditor" class="payout-selection declaration-editor session-content">
       <view class="payout-selection-content">
         <text class="selection-caution declaration-caution">请按本笔汇款实际情况填写。</text>
         <text class="heading declaration-title">请补充本笔用途</text>
@@ -109,7 +111,7 @@
         <button class="primary" @tap="saveDeclaration">{{ declarationEditor.quote ? '保存并继续' : '保存汇款信息' }}</button>
       </view>
     </view>
-    <view v-else-if="payoutSelection && !payoutDraftsOpen" class="payout-selection">
+    <view v-else-if="payoutSelection && !payoutDraftsOpen" class="payout-selection session-content">
       <view class="payout-selection-content">
         <text class="payout-selection-note">仅支持实名认证用户本人的到账账户，付款前将核验账户信息。</text>
         <text class="payout-section-title">{{ payoutMethod === 'wechat' ? '我的微信收款账户' : '我的银行卡' }}</text>
@@ -156,6 +158,7 @@
     </view>
     <RemitOrderConfirmation
       v-else-if="confirmation && !payoutDraftsOpen"
+      class="session-content"
       :quote="confirmation.quote"
       :account-label="confirmation.account.label"
       :declaration="confirmation.declaration"
@@ -167,27 +170,30 @@
       @payment="paymentEditor = confirmation.quote.payment_method"
       @edit="back"
     />
-    <RemitCoupons v-else-if="couponsOpen" @select="selectCoupon" @expired="expire" />
-    <RemitDrafts v-else-if="draftsOpen" @resume="resumeDraft" @expired="expire" />
+    <RemitCoupons v-else-if="couponsOpen" class="session-content" @select="selectCoupon" @expired="expire" />
+    <RemitDrafts v-else-if="draftsOpen" class="session-content" @resume="resumeDraft" @expired="expire" />
     <RemitOrders
       v-else-if="ordersOpen && !ticketsOpen" ref="orderView" :initial-order="returnOrder" :detail-only="inboxOpen"
+      class="session-content"
       :page-visible="props.pageVisible"
       @expired="expire" @detail="orderDetail = $event" @support="supportForOrder"
       @leave="back" @remit="startAnotherRemit"
     />
-    <RemitTickets v-else-if="ticketsOpen" ref="tickets" :initial-ticket="noticeTicket" :order-reference="ticketOrder" @expired="expire" />
-    <RemitPayoutDrafts v-else-if="payoutDraftsOpen" ref="payoutDraftsView" @expired="expire" />
+    <RemitTickets v-else-if="ticketsOpen" ref="tickets" class="session-content"
+      :initial-ticket="noticeTicket" :order-reference="ticketOrder" @expired="expire" />
+    <RemitPayoutDrafts v-else-if="payoutDraftsOpen" ref="payoutDraftsView" class="session-content" @expired="expire" />
     <RemitMaterials
       v-else-if="materialsOpen" ref="materialsView" :target-reference="materialTarget"
+      class="session-content"
       @expired="expire" @leave="closeMaterials"
     />
-    <RemitClosure v-else-if="closureOpen" @expired="expire" />
+    <RemitClosure v-else-if="closureOpen" class="session-content" @expired="expire" />
     <template v-else-if="kycOpen || chatOpen">
-      <RemitKyc v-if="kycOpen" v-show="!chatOpen" :page-visible="props.pageVisible && !chatOpen"
+      <RemitKyc v-if="kycOpen" v-show="!chatOpen" class="session-content" :page-visible="props.pageVisible && !chatOpen"
         @expired="expire" @home="leaveKycForHome" @support="chatOpen = true" />
       <RemitSupportConversation v-if="chatOpen" :messages="messages" :sending="sending" :status="status" :send="send" />
     </template>
-    <view v-else-if="settingsOpen" class="body account-content settings-content">
+    <view v-else-if="settingsOpen" class="body account-content settings-content session-content">
       <text class="account-section-title">账户与安全</text>
       <button class="card account-link" @tap="closureOpen = true">
         <image class="account-icon" src="/static/remit/shield.svg" mode="aspectFit" />
@@ -220,7 +226,7 @@
         <text v-if="appVersion" class="settings-version">App 版本 {{ appVersion }}</text>
       </view>
     </view>
-    <view v-else-if="profileOpen && member && !inboxOpen && !helpOpen" class="body account-content">
+    <view v-else-if="profileOpen && member && !inboxOpen && !helpOpen" class="body account-content session-content">
       <view class="card account-identity">
         <text class="account-avatar">{{ member.userName.slice(0, 1) || '会' }}</text>
         <text class="account-name">{{ member.userName }}</text>
@@ -250,95 +256,98 @@
         </button>
       </view>
     </view>
-    <view v-else-if="onHome" class="home-content session-home">
-      <view class="line home-head">
+    <view v-else-if="onHome" class="session-home-layout">
+      <view class="line home-head session-home-head">
         <view class="brand">
           <view class="brand-tile"><image src="/static/remit/logo-home.svg" mode="aspectFit" /></view>
           <view><text class="brand-name">筷子闪汇</text><text class="brand-en">KUAIZI REMIT</text></view>
         </view>
-        <button class="support icon-control home-support" role="button" aria-label="帮助与客服" :disabled="busy" @tap="helpOpen = true">
+        <button class="support icon-control home-support" role="button" aria-label="帮助与客服"
+          hover-class="none" :disabled="busy" @tap="helpOpen = true">
           <image src="/static/remit/support.svg" mode="aspectFit" />
           <text v-if="unread" class="home-support-unread" :aria-label="`${unread} 条未读客服消息`" />
         </button>
       </view>
-      <view v-if="announcement" class="promotion payment-notice">{{ announcement }}</view>
-      <text v-if="quote?.simulated" class="description">本地模拟报价，不会扣款。</text>
-      <view class="card quote-card">
-        <view class="line quote-label"><text>汇款金额</text><text class="pill">EUR → CNY</text></view>
-        <view class="currency">
-          <view class="flag eu"><image src="/static/remit/eu.png" mode="scaleToFill" /></view><text>EUR</text>
-          <input v-model="amount" type="digit" maxlength="12" class="currency-amount" aria-label="联调汇款金额" />
-        </view>
-        <template v-if="quote">
-          <view class="line quote-label"><text>收款金额</text><text class="muted">{{ quote.eta }}</text></view>
+      <view class="home-content session-home session-content">
+        <view v-if="announcement" class="promotion payment-notice">{{ announcement }}</view>
+        <text v-if="quote?.simulated" class="description">本地模拟报价，不会扣款。</text>
+        <view class="card quote-card">
+          <view class="line quote-label"><text>汇款金额</text><text class="pill">EUR → CNY</text></view>
           <view class="currency">
-            <image class="flag" src="/static/remit/china.svg" mode="aspectFit" /><text>CNY</text>
-            <text class="currency-amount accent" :class="{ 'wide-amount': formatAmount(quote.payout_minor).length >= 11 }">
-              {{ formatAmount(quote.payout_minor) }}
-            </text>
+            <view class="flag eu"><image src="/static/remit/eu.png" mode="scaleToFill" /></view><text>EUR</text>
+            <input v-model="amount" type="digit" maxlength="12" class="currency-amount" aria-label="联调汇款金额" />
           </view>
-        </template>
-        <view class="line payout">
-          <view>
-            <text>{{ payoutMethod === 'bank' ? '银行卡收款' : '微信收款' }}</text>
-            <text class="muted block">人民币到账方式</text>
+          <template v-if="quote">
+            <view class="line quote-label"><text>收款金额</text><text class="muted">{{ quote.eta }}</text></view>
+            <view class="currency">
+              <image class="flag" src="/static/remit/china.svg" mode="aspectFit" /><text>CNY</text>
+              <text class="currency-amount accent" :class="{ 'wide-amount': formatAmount(quote.payout_minor).length >= 11 }">
+                {{ formatAmount(quote.payout_minor) }}
+              </text>
+            </view>
+          </template>
+          <view class="line payout">
+            <view>
+              <text>{{ payoutMethod === 'bank' ? '银行卡收款' : '微信收款' }}</text>
+              <text class="muted block">人民币到账方式</text>
+            </view>
+            <button class="inline-action accent" hover-class="none" :disabled="busy" @tap="changePayoutMethod">更换</button>
           </view>
-          <button class="inline-action accent" :disabled="busy" @tap="changePayoutMethod">更换</button>
         </view>
-      </view>
 
-      <view v-if="quote" class="quote-breakdown session-quote-costs" aria-label="报价费用">
-        <view class="line"><text>{{ quote.can_submit ? '筷子闪汇锁定汇率' : '筷子闪汇试算汇率' }}</text><text>{{ (quote.rate_ten_thousandths / 10000).toFixed(4) }}</text></view>
-        <view class="line quote-fee-line">
-          <text>汇款手续费</text>
-          <view class="inline quote-fee-values">
-            <text v-if="quote.discount_minor" class="strike">€{{ formatAmount(quote.base_fee_minor) }}</text>
-            <text>€{{ formatAmount(quote.base_fee_minor - quote.discount_minor) }}</text>
+        <view v-if="quote" class="quote-breakdown session-quote-costs" aria-label="报价费用">
+          <view class="line"><text>{{ quote.can_submit ? '筷子闪汇锁定汇率' : '筷子闪汇试算汇率' }}</text><text>{{ (quote.rate_ten_thousandths / 10000).toFixed(4) }}</text></view>
+          <view class="line quote-fee-line">
+            <text>汇款手续费</text>
+            <view class="inline quote-fee-values">
+              <text v-if="quote.discount_minor" class="strike">€{{ formatAmount(quote.base_fee_minor) }}</text>
+              <text>€{{ formatAmount(quote.base_fee_minor - quote.discount_minor) }}</text>
+            </view>
           </view>
+          <view v-if="quote.channel_fee_minor" class="line"><text>付款通道费</text><text>€{{ formatAmount(quote.channel_fee_minor) }}</text></view>
+          <button class="line quote-coupon-row" hover-class="none" :disabled="busy" @tap="couponsOpen = true">
+            <text>优惠券</text>
+            <view class="inline">
+              <text :class="{ offer: selectedCoupon }">{{ selectedCoupon?.title ?? '选择优惠券' }}</text>
+              <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
+            </view>
+          </button>
+          <view v-if="quote.payment_notice" class="promotion payment-notice">{{ quote.payment_notice }}</view>
         </view>
-        <view v-if="quote.channel_fee_minor" class="line"><text>付款通道费</text><text>€{{ formatAmount(quote.channel_fee_minor) }}</text></view>
-        <button class="line quote-coupon-row" :disabled="busy" @tap="couponsOpen = true">
-          <text>优惠券</text>
-          <view class="inline">
-            <text :class="{ offer: selectedCoupon }">{{ selectedCoupon?.title ?? '选择优惠券' }}</text>
+
+        <view class="card home-quote-options">
+          <button class="line home-quote-option" hover-class="none" :disabled="busy" @tap="paymentEditor = paymentMethod">
+            <text class="quote-label">付款方式</text>
+            <text>{{ paymentOptions.find(method => method.value === paymentMethod)?.label }}</text>
             <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
-          </view>
-        </button>
-        <view v-if="quote.payment_notice" class="promotion payment-notice">{{ quote.payment_notice }}</view>
-      </view>
-
-      <view class="card home-quote-options">
-        <button class="line home-quote-option" :disabled="busy" @tap="paymentEditor = paymentMethod">
-          <text class="quote-label">付款方式</text>
-          <text>{{ paymentOptions.find(method => method.value === paymentMethod)?.label }}</text>
-          <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
-        </button>
-        <button class="line home-quote-option" :disabled="busy" @tap="openDeclaration()">
-          <text class="quote-label">汇款用途与资金来源</text>
-          <text>{{ declarationError(declaration) ? '待填写' : '已填写' }}</text>
-          <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
-        </button>
-      </view>
-
-      <view v-if="quote" class="quote-breakdown">
-        <view v-if="quote.record_no" class="line quote-reference">
-          <text>{{ quote.can_submit ? '报价编号' : '试算编号' }}</text>
-          <button class="inline-action accent" @tap="copyQuoteReference(quote.record_no)">复制编号</button>
+          </button>
+          <button class="line home-quote-option" hover-class="none" :disabled="busy" @tap="openDeclaration()">
+            <text class="quote-label">汇款用途与资金来源</text>
+            <text>{{ declarationError(declaration) ? '待填写' : '已填写' }}</text>
+            <image class="chevron" src="/static/remit/chevron.svg" mode="aspectFit" />
+          </button>
         </view>
-        <text v-if="quote.record_no" class="description quote-reference-value">{{ quote.record_no }}</text>
-        <text v-if="quote.can_submit && quote.expires_at" class="description">
-          {{ quoteExpired ? '锁汇已过期' : '汇率有效至 ' + formatRemitTimestamp(quote.expires_at * 1000, 'time') }}
-        </text>
-        <button v-else-if="quote.record_no" class="inline-action accent" :disabled="busy" @tap="saveDraft(quote.record_no)">保存为草稿</button>
-      </view>
-      <text v-if="quote?.mode === 'local_estimate'" class="description">试算报价不锁定汇率。</text>
-      <view class="line session-quote-links">
-        <button v-if="!quote" class="inline-action accent" :disabled="busy" @tap="couponsOpen = true">
-          {{ selectedCoupon ? `优惠券 · ${selectedCoupon.title}` : '我的优惠券' }}
-        </button>
-        <button class="inline-action accent" :disabled="busy" @tap="inboxOpen = true">
-          消息通知<text v-if="inboxCount" class="pill">{{ inboxCount }} 条未读</text>
-        </button>
+
+        <view v-if="quote" class="quote-breakdown">
+          <view v-if="quote.record_no" class="line quote-reference">
+            <text>{{ quote.can_submit ? '报价编号' : '试算编号' }}</text>
+            <button class="inline-action accent" @tap="copyQuoteReference(quote.record_no)">复制编号</button>
+          </view>
+          <text v-if="quote.record_no" class="description quote-reference-value">{{ quote.record_no }}</text>
+          <text v-if="quote.can_submit && quote.expires_at" class="description">
+            {{ quoteExpired ? '锁汇已过期' : '汇率有效至 ' + formatRemitTimestamp(quote.expires_at * 1000, 'time') }}
+          </text>
+          <button v-else-if="quote.record_no" class="inline-action accent" :disabled="busy" @tap="saveDraft(quote.record_no)">保存为草稿</button>
+        </view>
+        <text v-if="quote?.mode === 'local_estimate'" class="description">试算报价不锁定汇率。</text>
+        <view class="line session-quote-links">
+          <button v-if="!quote" class="inline-action accent" hover-class="none" :disabled="busy" @tap="couponsOpen = true">
+            {{ selectedCoupon ? `优惠券 · ${selectedCoupon.title}` : '我的优惠券' }}
+          </button>
+          <button class="inline-action accent" hover-class="none" :disabled="busy" @tap="inboxOpen = true">
+            消息通知<text v-if="inboxCount" class="pill">{{ inboxCount }} 条未读</text>
+          </button>
+        </view>
       </view>
     </view>
 
@@ -348,18 +357,19 @@
     </view>
     <view v-if="showTabs" class="session-bottom">
       <view v-if="onHome" class="footer quote-footer">
-        <text v-if="error" class="hint offer" role="alert">{{ error }}</text>
+        <text v-if="error" class="hint offer quote-feedback" role="alert">{{ error }}</text>
         <view class="line quote-footer-action">
           <view v-if="quote" class="home-savings">
             <text class="muted block">合计支付</text>
             <text class="price">€{{ formatAmount(quote.total_payable_minor) }}</text>
           </view>
-          <button class="primary" :disabled="busy" @tap="continueQuote">{{ busy ? '请稍候' : quoteActionLabel }}</button>
+          <button class="primary" hover-class="none" :disabled="busy" @tap="continueQuote">{{ quoteActionLabel }}</button>
         </view>
       </view>
       <view class="tabs" aria-label="主导航">
         <button
           v-for="tab in sessionTabs" :key="tab.key" class="tab" :class="{ active: activeTab === tab.key }"
+          hover-class="none"
           :aria-current="activeTab === tab.key ? 'page' : undefined" :disabled="busy || claimingOffer" @tap="selectTab(tab.key)"
         >
           <image :src="tab.icon" mode="aspectFit" /><text>{{ tab.label }}</text>
@@ -401,6 +411,7 @@ import RemitPayoutDrafts from './RemitPayoutDrafts.vue';
 import type { MemberCoupon } from './memberCoupon';
 import { declarationError, emptyDeclaration, fundSources, transferPurposes, type RemittanceDeclaration } from './remittanceDeclaration';
 import { pendingNotice, syncMemberPush } from './memberPush';
+import { useRemitLoading } from './useRemitLoading';
 
 interface QuoteEstimate {
   record_no: string;
@@ -465,6 +476,7 @@ const confirmation = ref<{
 }>();
 const busy = ref(false);
 const inboxOpen = ref(false);
+const quoting = ref(false);
 const targetNotice = ref<string>();
 const chatOpen = ref(false);
 const helpOpen = ref(false);
@@ -510,6 +522,8 @@ const subPageOpen = computed(() =>
   || Boolean(confirmation.value || payoutSelection.value || paymentEditor.value || declarationEditor.value),
 );
 const onHome = computed(() => Boolean(member.value) && !subPageOpen.value && !profileOpen.value);
+const inboxVisible = computed(() => inboxOpen.value && !ordersOpen.value && !ticketsOpen.value && !materialsOpen.value);
+useRemitLoading(() => quoting.value && onHome.value && props.pageVisible);
 const onCouponHome = computed(() => onHome.value && props.pageVisible);
 const showAccountSummary = computed(() => Boolean(member.value) && profileOpen.value && !subPageOpen.value && props.pageVisible);
 const onOrderTab = computed(() => ordersOpen.value && !ticketsOpen.value && !inboxOpen.value && !orderDetail.value);
@@ -983,24 +997,32 @@ function logout() {
 
 function estimate() {
   return perform(async () => {
-    quote.value = undefined;
     const match = /^(\d{1,9})(?:\.(\d{0,2}))?$/.exec(amount.value);
     const principal = match ? Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0')) : 0;
     if (principal < 10_000 || principal > 99_999_999_900) {
+      quote.value = undefined;
       throw new Error('请输入有效金额，最低 €100，最多两位小数。');
     }
     const revision = quoteRevision;
-    const result = await request.post<QuoteEstimate>('app/remittance/quotes', {
-      principal_minor: principal,
-      payment_method: paymentMethod.value,
-      payout_method: payoutMethod.value,
-      coupon_id: selectedCoupon.value ? Number(selectedCoupon.value.id) : null,
-    }, { handleUnauthorized: false });
-    if (revision !== quoteRevision) return;
-    if ((result.mode === 'local_estimate' && result.can_submit) || (result.mode === 'locked' && !result.expires_at)) {
-      throw new Error('暂时无法显示报价，请稍后重试。');
+    quoting.value = true;
+    try {
+      const result = await request.post<QuoteEstimate>('app/remittance/quotes', {
+        principal_minor: principal,
+        payment_method: paymentMethod.value,
+        payout_method: payoutMethod.value,
+        coupon_id: selectedCoupon.value ? Number(selectedCoupon.value.id) : null,
+      }, { handleUnauthorized: false });
+      if (revision !== quoteRevision) return;
+      if ((result.mode === 'local_estimate' && result.can_submit) || (result.mode === 'locked' && !result.expires_at)) {
+        throw new Error('暂时无法显示报价，请稍后重试。');
+      }
+      quote.value = result;
+    } catch (reason) {
+      if (revision === quoteRevision) quote.value = undefined;
+      throw reason;
+    } finally {
+      quoting.value = false;
     }
-    quote.value = result;
   });
 }
 
@@ -1165,6 +1187,61 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.remit.remit-session {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.session-content,
+.session-home-layout {
+  flex: 1;
+  min-height: 0;
+}
+.session-content {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.session-home-layout {
+  display: flex;
+  flex-direction: column;
+}
+.session-home-head {
+  flex-shrink: 0;
+  margin: 32rpx 40rpx 0;
+}
+.remit-home .session-home {
+  padding-top: 0;
+  padding-bottom: 28rpx;
+}
+.session-home > .promotion:first-child {
+  margin-top: 20rpx;
+}
+.session-home-head .home-support[disabled],
+.session-home .inline-action[disabled],
+.session-home .quote-coupon-row[disabled],
+.session-home .home-quote-option[disabled],
+.session-top .top-action[disabled],
+.session-bottom .tab[disabled] {
+  background: transparent;
+}
+.session-home-head .home-support[disabled] {
+  color: #000;
+}
+.session-home .home-quote-option[disabled] {
+  color: #242733;
+}
+.session-home .quote-coupon-row[disabled] {
+  color: inherit;
+}
+.session-home .inline-action.accent[disabled],
+.session-bottom .tab.active[disabled] {
+  color: var(--remit-accent);
+}
+.session-top .top-action[disabled],
+.session-bottom .tab[disabled] {
+  color: #8e8e8e;
+}
 .session-quote-costs {
   margin-inline: 4rpx;
 }
@@ -1210,7 +1287,10 @@ onMounted(() => {
   text-align: left;
 }
 .home-quote-option + .home-quote-option { border-top: 1rpx solid #e7e7ef; }
-.home-quote-option .quote-label { margin-right: auto; }
+.home-quote-option .quote-label {
+  margin-right: auto;
+  margin-bottom: 0;
+}
 .payment-editor .payout-selection-content,
 .declaration-editor .payout-selection-content { padding: 32rpx 32rpx 0; }
 .payment-editor .footer,
@@ -1584,16 +1664,22 @@ onMounted(() => {
   text-align: center;
 }
 .session-bottom {
-  position: sticky;
-  bottom: 0;
   z-index: 1;
   flex-shrink: 0;
-  margin-top: auto;
   background: #fff;
   border-top: 1rpx solid #e7e7ef;
 }
 .session-bottom .quote-footer {
+  position: relative;
   padding-bottom: 16rpx;
+}
+.quote-feedback {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  padding: 8rpx 32rpx;
+  background: var(--remit-light-surface);
 }
 .quote-footer-action .home-savings {
   min-width: 0;
@@ -1601,6 +1687,9 @@ onMounted(() => {
 }
 .quote-footer-action .primary {
   flex: 1;
+}
+.quote-footer-action .primary[disabled] {
+  opacity: 1;
 }
 .quote-footer-action .home-savings + .primary {
   flex: 0 0 338rpx;

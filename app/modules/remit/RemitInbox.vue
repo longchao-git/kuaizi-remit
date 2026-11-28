@@ -1,8 +1,7 @@
 <template>
   <view class="inbox">
-    <text v-if="busy" class="description" role="status">处理中…</text>
-    <text v-else-if="error" class="description offer" role="alert">{{ error }}</text>
-    <text v-else-if="!displayed.length" class="description">暂无消息</text>
+    <text v-if="error" class="description offer" role="alert">{{ error }}</text>
+    <text v-else-if="hasLoaded && !busy && !displayed.length" class="description">暂无消息</text>
 
     <template v-for="{ item, icon, dateLabel, timeLabel } in datedNotices" :key="item.reference ?? item.id">
       <text v-if="dateLabel" class="inbox-date">{{ dateLabel }}</text>
@@ -45,6 +44,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import request, { UnauthorizedError } from '@/request/http';
 import { formatRemitTimestamp, localDateKey } from './previewOrder';
+import { useRemitLoading } from './useRemitLoading';
 
 type Notice = {
   id: number;
@@ -69,8 +69,9 @@ const noticeImages = {
 type NoticeIcon = keyof typeof noticeImages | 'arrival' | 'payment' | 'security';
 
 const emit = defineEmits<{ expired: []; unread: [count: number]; ticket: [id: string]; order: [reference: string]; material: [reference: string] }>();
-const props = defineProps<{ targetNotice?: string }>();
+const props = defineProps<{ targetNotice?: string; pageVisible: boolean }>();
 const items = ref<Notice[]>([]);
+const hasLoaded = ref(false);
 const pushedNotice = ref<Notice>();
 const displayed = computed(() => {
   const selected = pushedNotice.value;
@@ -101,6 +102,8 @@ const pages = ref(0);
 const latest = ref<string | number>();
 const unread = ref(0);
 const busy = ref(false);
+const foregroundBusy = ref(false);
+useRemitLoading(() => foregroundBusy.value && props.pageVisible);
 const error = ref('');
 const canMarkAll = computed(() => !busy.value && latest.value !== undefined && unread.value > 0);
 const options = { handleUnauthorized: false };
@@ -112,6 +115,7 @@ async function query(next: number) {
   const result = await request.get<NoticePage>('app/notifications', { page: next }, options);
   if (!active) return;
   items.value = result.list;
+  hasLoaded.value = true;
   page.value = result.page;
   pages.value = result.total_pages;
   unread.value = result.unread_count;
@@ -121,10 +125,11 @@ async function query(next: number) {
   }
 }
 
-async function run(action: () => Promise<void>) {
+async function run(action: () => Promise<void>, showLoading = true) {
   if (!active || busy.value) return;
   busy.value = true;
   error.value = '';
+  foregroundBusy.value = showLoading;
   try {
     await action();
   } catch (reason) {
@@ -132,6 +137,7 @@ async function run(action: () => Promise<void>) {
     if (active && reason instanceof UnauthorizedError) emit('expired');
     error.value = reason instanceof Error ? reason.message : '操作失败，请重试';
   } finally {
+    foregroundBusy.value = false;
     busy.value = false;
     if (active && targetPending) {
       const target = targetPending;
@@ -139,7 +145,7 @@ async function run(action: () => Promise<void>) {
       void openPush(target);
     } else if (active && reloadPending) {
       reloadPending = false;
-      void load(page.value);
+      void load(page.value, false);
     }
   }
 }
@@ -166,13 +172,13 @@ function openPush(reference: string) {
   });
 }
 
-function load(next: number) {
-  return run(() => query(next));
+function load(next: number, showLoading = true) {
+  return run(() => query(next), showLoading);
 }
 
 function refresh() {
   if (busy.value) reloadPending = true;
-  else void load(page.value);
+  else void load(page.value, false);
 }
 
 defineExpose({ refresh, markAll, canMarkAll });
