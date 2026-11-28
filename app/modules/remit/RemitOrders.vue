@@ -1,167 +1,173 @@
 <template>
-  <view :key="detail?.reference ?? 'list'" class="body order-list" :class="{ 'figma-order-page': usesFigmaSurface }">
-    <view v-if="!detail && !detailOnly" class="order-filters" role="group" aria-label="订单状态筛选">
-      <button
-        v-for="filter in filters" :key="filter.value" class="order-filter"
-        :class="{ 'is-selected': selectedFilter === filter.value }"
-        :aria-pressed="selectedFilter === filter.value" :disabled="busy" @tap="selectFilter(filter.value)"
-      >{{ filter.label }}</button>
-    </view>
-    <text v-if="error" class="description offer" role="alert">{{ error }}</text>
-    <text v-else-if="hasLoaded && !busy && !detailOnly && !items.length && !detail" class="description">
-      {{ selectedFilter === 'all' ? '暂无汇款订单' : '暂无该状态的汇款订单' }}
-    </text>
-    <view v-if="detail" class="order-detail" :class="{ 'standard-detail': standardDetail }">
-      <template v-if="orderStage === 'payment-review'">
-        <view class="order-summary progress-hero">
-          <view class="order-stage-symbol" aria-hidden="true">
-            <image src="/static/remit/status-refresh.svg" mode="aspectFit" />
-          </view>
-          <text class="heading">正在确认你的付款</text>
-          <text class="order-meta">系统正在核对本笔订单的付款信息</text>
-        </view>
-        <view class="card order-breakdown payment-check-card">
-          <view class="line"><text>订单号</text><text>{{ detail.reference }}</text></view>
-          <view v-if="detail.quote" class="line">
-            <text>应付金额</text><text>€{{ formatAmount(detail.quote.total_payable_minor) }}</text>
-          </view>
-          <view class="line"><text>下单时间</text><text>{{ formatRemitTimestamp(detail.created_at) }}</text></view>
-        </view>
-        <view class="line progress-check-row">
-          <text>可稍后查询</text>
-          <button class="inline-action accent" :disabled="busy" @tap="reload">刷新状态</button>
-        </view>
-        <text class="progress-notice">请勿重复付款。如需核验付款凭证，可联系筷子闪汇客服。</text>
-        <view class="order-actions progress-actions">
-          <button v-if="detail.payment_url" class="primary" :disabled="busy" @tap="continuePayment">继续付款</button>
-          <button class="secondary progress-home" @tap="$emit('remit')">返回首页</button>
-          <button class="secondary" @tap="$emit('support', detail.reference)">联系客服</button>
-        </view>
-      </template>
-      <template v-else-if="orderStage === 'processing'">
-        <view class="order-summary is-processing">
-          <text class="order-amount">{{ detail.quote ? `¥${formatAmount(detail.quote.payout_minor)}` : `€${formatAmount(detail.principal_minor)}` }}</text>
-          <text class="order-status tone-progress">{{ displayStatus(detail) }}</text>
-          <text class="order-meta">{{ detail.quote ? '报价到账金额' : '汇款本金' }}</text>
-        </view>
-        <view class="card order-progress" aria-label="汇款进度">
-          <view v-for="(step, index) in processingSteps" :key="step" class="order-progress-step" :class="{ 'is-current': index === 2 }">
-            <view class="order-progress-mark" :class="{ 'is-done': index < 2 }" aria-hidden="true" />
-            <view>
-              <text class="block">{{ step }}</text>
-              <text v-if="index === 0" class="order-meta">{{ formatRemitTimestamp(detail.created_at, 'time') }}</text>
-              <text v-else-if="index === 1" class="order-meta">付款已确认</text>
-              <text v-else-if="index === 2" class="order-meta">正在处理</text>
-              <text v-else-if="index === 3" class="order-meta">等待处理</text>
+  <view class="order-page">
+    <view v-if="detail || detailOnly" :key="detail?.reference" class="body order-list"
+      :class="{ 'figma-order-page': usesFigmaSurface }">
+      <text v-if="error" class="description offer" role="alert">{{ error }}</text>
+      <view v-if="detail" class="order-detail" :class="{ 'standard-detail': standardDetail }">
+        <template v-if="orderStage === 'payment-review'">
+          <view class="order-summary progress-hero">
+            <view class="order-stage-symbol" aria-hidden="true">
+              <image src="/static/remit/status-refresh.svg" mode="aspectFit" />
             </view>
+            <text class="heading">正在确认你的付款</text>
+            <text class="order-meta">系统正在核对本笔订单的付款信息</text>
           </view>
-        </view>
-        <view class="line card progress-help">
-          <image class="progress-help-icon" src="/static/remit/support.svg" mode="aspectFit" aria-hidden="true" />
-          <view class="progress-help-copy">
-            <text class="block">需要帮助？</text>
-            <text class="order-meta">客服可协助查询本笔汇款</text>
-          </view>
-          <button class="inline-action accent" @tap="$emit('support', detail.reference)">客服 ›</button>
-        </view>
-        <view class="order-actions progress-actions">
-          <button class="inline-action accent progress-refresh" :disabled="busy" @tap="reload">刷新状态</button>
-          <button class="secondary" @tap="$emit('support', detail.reference)">联系筷子闪汇客服</button>
-        </view>
-      </template>
-      <template v-else-if="showingSentResult">
-        <view class="order-summary progress-hero sent-hero">
-          <view class="order-stage-symbol is-sent" aria-hidden="true"><view class="refund-tick" /></view>
-          <text class="order-amount">{{ detail.quote ? `¥${formatAmount(detail.quote.payout_minor)}` : `€${formatAmount(detail.principal_minor)}` }}</text>
-          <text class="order-meta">{{ detail.quote ? '报价到账金额' : '汇款本金' }}</text>
-        </view>
-        <text class="order-status tone-success sent-status">{{ displayStatus(detail) }}</text>
-        <view class="card order-breakdown sent-breakdown">
-          <view v-if="detail.provider_checked_at" class="line">
-            <text>状态更新时间</text>
-            <text>{{ formatRemitTimestamp(detail.provider_checked_at) }}</text>
-          </view>
-          <view class="line"><text>汇款本金</text><text>€{{ formatAmount(detail.principal_minor) }}</text></view>
-          <template v-if="detail.quote">
-            <view v-if="detail.quote.base_fee_minor !== undefined" class="line"><text>汇款手续费</text><text>€{{ formatAmount(detail.quote.base_fee_minor) }}</text></view>
-            <view class="line"><text>报价汇率</text><text>1 EUR = {{ (detail.quote.rate_ten_thousandths / 10000).toFixed(4) }} CNY</text></view>
-            <view class="line"><text>合计支付</text><text>€{{ formatAmount(detail.quote.total_payable_minor) }}</text></view>
-          </template>
-        </view>
-        <text class="progress-notice sent-notice">汇款已下发，实际到账请以收款账户记录为准。</text>
-        <view class="order-actions progress-actions">
-          <button class="primary" @tap="$emit('remit')">再次汇款</button>
-          <button class="secondary" @tap="showSentResult = false">查看订单详情</button>
-        </view>
-      </template>
-      <template v-else>
-        <view v-if="refundStatus" class="refund-summary">
-          <view class="refund-symbol" :class="{ completed: refundStatus === 'complete' }" aria-hidden="true">
-            <view v-if="refundStatus === 'complete'" class="refund-tick" />
-            <image v-else src="/static/remit/status-refund.svg" mode="aspectFit" />
-          </view>
-          <text v-if="refundStatus === 'complete'" class="order-status tone-success">退款完成</text>
-          <text class="refund-title">{{ displayStatus(detail) }}</text>
-        </view>
-        <view v-else class="order-summary">
-          <text class="order-status" :class="statusTone(detail)">{{ displayStatus(detail) }}</text>
-          <text class="order-amount">
-            {{ detail.quote ? `¥${formatAmount(detail.quote.payout_minor)}` : `€${formatAmount(detail.principal_minor)}` }}
-          </text>
-          <text class="order-meta">{{ detail.quote ? '报价到账金额' : '汇款本金' }}</text>
-        </view>
-        <view v-if="refundStatus" class="card order-breakdown">
-          <view class="line"><text>原订单号</text><text>{{ detail.reference }}</text></view>
-          <view class="line"><text>下单时间</text><text>{{ formatRemitTimestamp(detail.created_at) }}</text></view>
-          <view v-if="detail.provider_checked_at" class="line">
-            <text>状态更新时间</text><text>{{ formatRemitTimestamp(detail.provider_checked_at) }}</text>
-          </view>
-        </view>
-        <text v-if="refundStatus" class="progress-notice refund-notice" :class="{ 'is-complete': refundStatus === 'complete' }">
-          {{ refundStatus === 'complete' ? '可在原付款账户的明细中核对退款。' : '退款进度以订单状态为准。如需帮助，可咨询筷子闪汇客服。' }}
-        </text>
-        <button v-if="refundStatus && detail.quote" class="inline-action accent" @tap="showOriginalQuote = !showOriginalQuote">
-          {{ showOriginalQuote ? '收起原订单费用' : '查看原订单费用' }}
-        </button>
-        <view v-if="!refundStatus || (showOriginalQuote && detail.quote)" class="card order-breakdown">
-          <template v-if="!refundStatus">
-            <view class="line"><text>订单编号</text><text>{{ detail.reference }}</text></view>
+          <view class="card order-breakdown payment-check-card">
+            <view class="line"><text>订单号</text><text>{{ detail.reference }}</text></view>
+            <view v-if="detail.quote" class="line">
+              <text>应付金额</text><text>€{{ formatAmount(detail.quote.total_payable_minor) }}</text>
+            </view>
             <view class="line"><text>下单时间</text><text>{{ formatRemitTimestamp(detail.created_at) }}</text></view>
-          </template>
-          <view class="line"><text>汇款本金</text><text>€{{ formatAmount(detail.principal_minor) }}</text></view>
-          <template v-if="detail.quote">
-            <view class="line">
-              <text>报价汇率</text>
-              <text>1 EUR = {{ (detail.quote.rate_ten_thousandths / 10000).toFixed(4) }} CNY</text>
-            </view>
-            <view v-if="detail.quote.base_fee_minor !== undefined" class="line"><text>汇款手续费</text><text>€{{ formatAmount(detail.quote.base_fee_minor) }}</text></view>
-            <view v-if="detail.quote.discount_minor" class="line"><text>优惠减免</text><text>−€{{ formatAmount(detail.quote.discount_minor) }}</text></view>
-            <view v-if="detail.quote.channel_fee_minor !== undefined" class="line"><text>付款通道费</text><text>€{{ formatAmount(detail.quote.channel_fee_minor) }}</text></view>
-            <view class="line order-total"><text>合计支付</text><text>€{{ formatAmount(detail.quote.total_payable_minor) }}</text></view>
-          </template>
-        </view>
-        <text v-if="!refundStatus && detail.provider_checked_at" class="description">
-          状态更新时间 {{ formatRemitTimestamp(detail.provider_checked_at) }}
-        </text>
-        <view class="order-actions">
-          <button v-if="detail.payment_url" class="primary" :disabled="busy" @tap="continuePayment">继续付款</button>
-          <button v-if="orderStage === 'sent'" class="inline-action accent" :disabled="busy" @tap="showSentResult = !showSentResult">
-            查看汇款结果
-          </button>
-          <view class="line order-action-pair">
-            <button class="secondary" @tap="$emit('support', detail.reference)">咨询这笔订单</button>
-            <button v-if="refundStatus" class="primary" :disabled="busy" @tap="$emit('leave')">
-              {{ detailOnly ? '返回消息' : '返回订单列表' }}
-            </button>
-            <button v-else-if="detail.status_label === '已下发'" class="primary" :disabled="busy" @tap="$emit('remit')">
-              再次汇款
-            </button>
           </view>
-          <button class="inline-action accent" :disabled="busy" @tap="reload">刷新状态</button>
-        </view>
-      </template>
+          <view class="line progress-check-row">
+            <text>可稍后查询</text>
+            <button class="inline-action accent" :disabled="busy" @tap="reload">刷新状态</button>
+          </view>
+          <text class="progress-notice">请勿重复付款。如需核验付款凭证，可联系筷子闪汇客服。</text>
+          <view class="order-actions progress-actions">
+            <button v-if="detail.payment_url" class="primary" :disabled="busy" @tap="continuePayment">继续付款</button>
+            <button class="secondary progress-home" @tap="$emit('remit')">返回首页</button>
+            <button class="secondary" @tap="$emit('support', detail.reference)">联系客服</button>
+          </view>
+        </template>
+        <template v-else-if="orderStage === 'processing'">
+          <view class="order-summary is-processing">
+            <text class="order-amount">{{ detail.quote ? `¥${formatAmount(detail.quote.payout_minor)}` : `€${formatAmount(detail.principal_minor)}` }}</text>
+            <text class="order-status tone-progress">{{ displayStatus(detail) }}</text>
+            <text class="order-meta">{{ detail.quote ? '报价到账金额' : '汇款本金' }}</text>
+          </view>
+          <view class="card order-progress" aria-label="汇款进度">
+            <view v-for="(step, index) in processingSteps" :key="step" class="order-progress-step" :class="{ 'is-current': index === 2 }">
+              <view class="order-progress-mark" :class="{ 'is-done': index < 2 }" aria-hidden="true" />
+              <view>
+                <text class="block">{{ step }}</text>
+                <text v-if="index === 0" class="order-meta">{{ formatRemitTimestamp(detail.created_at, 'time') }}</text>
+                <text v-else-if="index === 1" class="order-meta">付款已确认</text>
+                <text v-else-if="index === 2" class="order-meta">正在处理</text>
+                <text v-else-if="index === 3" class="order-meta">等待处理</text>
+              </view>
+            </view>
+          </view>
+          <view class="line card progress-help">
+            <image class="progress-help-icon" src="/static/remit/support.svg" mode="aspectFit" aria-hidden="true" />
+            <view class="progress-help-copy">
+              <text class="block">需要帮助？</text>
+              <text class="order-meta">客服可协助查询本笔汇款</text>
+            </view>
+            <button class="inline-action accent" @tap="$emit('support', detail.reference)">客服 ›</button>
+          </view>
+          <view class="order-actions progress-actions">
+            <button class="inline-action accent progress-refresh" :disabled="busy" @tap="reload">刷新状态</button>
+            <button class="secondary" @tap="$emit('support', detail.reference)">联系筷子闪汇客服</button>
+          </view>
+        </template>
+        <template v-else-if="showingSentResult">
+          <view class="order-summary progress-hero sent-hero">
+            <view class="order-stage-symbol is-sent" aria-hidden="true"><view class="refund-tick" /></view>
+            <text class="order-amount">{{ detail.quote ? `¥${formatAmount(detail.quote.payout_minor)}` : `€${formatAmount(detail.principal_minor)}` }}</text>
+            <text class="order-meta">{{ detail.quote ? '报价到账金额' : '汇款本金' }}</text>
+          </view>
+          <text class="order-status tone-success sent-status">{{ displayStatus(detail) }}</text>
+          <view class="card order-breakdown sent-breakdown">
+            <view v-if="detail.provider_checked_at" class="line">
+              <text>状态更新时间</text>
+              <text>{{ formatRemitTimestamp(detail.provider_checked_at) }}</text>
+            </view>
+            <view class="line"><text>汇款本金</text><text>€{{ formatAmount(detail.principal_minor) }}</text></view>
+            <template v-if="detail.quote">
+              <view v-if="detail.quote.base_fee_minor !== undefined" class="line"><text>汇款手续费</text><text>€{{ formatAmount(detail.quote.base_fee_minor) }}</text></view>
+              <view class="line"><text>报价汇率</text><text>1 EUR = {{ (detail.quote.rate_ten_thousandths / 10000).toFixed(4) }} CNY</text></view>
+              <view class="line"><text>合计支付</text><text>€{{ formatAmount(detail.quote.total_payable_minor) }}</text></view>
+            </template>
+          </view>
+          <text class="progress-notice sent-notice">汇款已下发，实际到账请以收款账户记录为准。</text>
+          <view class="order-actions progress-actions">
+            <button class="primary" @tap="$emit('remit')">再次汇款</button>
+            <button class="secondary" @tap="showSentResult = false">查看订单详情</button>
+          </view>
+        </template>
+        <template v-else>
+          <view v-if="refundStatus" class="refund-summary">
+            <view class="refund-symbol" :class="{ completed: refundStatus === 'complete' }" aria-hidden="true">
+              <view v-if="refundStatus === 'complete'" class="refund-tick" />
+              <image v-else src="/static/remit/status-refund.svg" mode="aspectFit" />
+            </view>
+            <text v-if="refundStatus === 'complete'" class="order-status tone-success">退款完成</text>
+            <text class="refund-title">{{ displayStatus(detail) }}</text>
+          </view>
+          <view v-else class="order-summary">
+            <text class="order-status" :class="statusTone(detail)">{{ displayStatus(detail) }}</text>
+            <text class="order-amount">
+              {{ detail.quote ? `¥${formatAmount(detail.quote.payout_minor)}` : `€${formatAmount(detail.principal_minor)}` }}
+            </text>
+            <text class="order-meta">{{ detail.quote ? '报价到账金额' : '汇款本金' }}</text>
+          </view>
+          <view v-if="refundStatus" class="card order-breakdown">
+            <view class="line"><text>原订单号</text><text>{{ detail.reference }}</text></view>
+            <view class="line"><text>下单时间</text><text>{{ formatRemitTimestamp(detail.created_at) }}</text></view>
+            <view v-if="detail.provider_checked_at" class="line">
+              <text>状态更新时间</text><text>{{ formatRemitTimestamp(detail.provider_checked_at) }}</text>
+            </view>
+          </view>
+          <text v-if="refundStatus" class="progress-notice refund-notice" :class="{ 'is-complete': refundStatus === 'complete' }">
+            {{ refundStatus === 'complete' ? '可在原付款账户的明细中核对退款。' : '退款进度以订单状态为准。如需帮助，可咨询筷子闪汇客服。' }}
+          </text>
+          <button v-if="refundStatus && detail.quote" class="inline-action accent" @tap="showOriginalQuote = !showOriginalQuote">
+            {{ showOriginalQuote ? '收起原订单费用' : '查看原订单费用' }}
+          </button>
+          <view v-if="!refundStatus || (showOriginalQuote && detail.quote)" class="card order-breakdown">
+            <template v-if="!refundStatus">
+              <view class="line"><text>订单编号</text><text>{{ detail.reference }}</text></view>
+              <view class="line"><text>下单时间</text><text>{{ formatRemitTimestamp(detail.created_at) }}</text></view>
+            </template>
+            <view class="line"><text>汇款本金</text><text>€{{ formatAmount(detail.principal_minor) }}</text></view>
+            <template v-if="detail.quote">
+              <view class="line">
+                <text>报价汇率</text>
+                <text>1 EUR = {{ (detail.quote.rate_ten_thousandths / 10000).toFixed(4) }} CNY</text>
+              </view>
+              <view v-if="detail.quote.base_fee_minor !== undefined" class="line"><text>汇款手续费</text><text>€{{ formatAmount(detail.quote.base_fee_minor) }}</text></view>
+              <view v-if="detail.quote.discount_minor" class="line"><text>优惠减免</text><text>−€{{ formatAmount(detail.quote.discount_minor) }}</text></view>
+              <view v-if="detail.quote.channel_fee_minor !== undefined" class="line"><text>付款通道费</text><text>€{{ formatAmount(detail.quote.channel_fee_minor) }}</text></view>
+              <view class="line order-total"><text>合计支付</text><text>€{{ formatAmount(detail.quote.total_payable_minor) }}</text></view>
+            </template>
+          </view>
+          <text v-if="!refundStatus && detail.provider_checked_at" class="description">
+            状态更新时间 {{ formatRemitTimestamp(detail.provider_checked_at) }}
+          </text>
+          <view class="order-actions">
+            <button v-if="detail.payment_url" class="primary" :disabled="busy" @tap="continuePayment">继续付款</button>
+            <button v-if="orderStage === 'sent'" class="inline-action accent" :disabled="busy" @tap="showSentResult = !showSentResult">
+              查看汇款结果
+            </button>
+            <view class="line order-action-pair">
+              <button class="secondary" @tap="$emit('support', detail.reference)">咨询这笔订单</button>
+              <button v-if="refundStatus" class="primary" :disabled="busy" @tap="$emit('leave')">
+                {{ detailOnly ? '返回消息' : '返回订单列表' }}
+              </button>
+              <button v-else-if="detail.status_label === '已下发'" class="primary" :disabled="busy" @tap="$emit('remit')">
+                再次汇款
+              </button>
+            </view>
+            <button class="inline-action accent" :disabled="busy" @tap="reload">刷新状态</button>
+          </view>
+        </template>
+      </view>
+      <button v-else class="inline-action accent" :disabled="busy" @tap="reload">刷新</button>
     </view>
-    <template v-else-if="!detailOnly">
+
+    <view v-if="!detailOnly" v-show="!detail" class="body order-list">
+      <view class="order-filters" role="group" aria-label="订单状态筛选">
+        <button
+          v-for="filter in filters" :key="filter.value" class="order-filter"
+          :class="{ 'is-selected': selectedFilter === filter.value }"
+          :aria-pressed="selectedFilter === filter.value" :disabled="busy" @tap="selectFilter(filter.value)"
+        >{{ filter.label }}</button>
+      </view>
+      <text v-if="error" class="description offer" role="alert">{{ error }}</text>
+      <text v-else-if="hasLoaded && !busy && !items.length" class="description">
+        {{ selectedFilter === 'all' ? '暂无汇款订单' : '暂无该状态的汇款订单' }}
+      </text>
       <button
         v-for="order in items" :key="order.reference" class="card order-card"
         :disabled="busy" @tap="open(order.reference)"
@@ -190,8 +196,8 @@
         <text>{{ page }} / {{ pages }}</text>
         <button class="inline-action" :disabled="busy || page >= pages" @tap="load(page + 1)">下一页</button>
       </view>
-    </template>
-    <button v-if="!detail" class="inline-action accent" :disabled="busy" @tap="reload">刷新</button>
+      <button class="inline-action accent" :disabled="busy" @tap="reload">刷新</button>
+    </view>
   </view>
 </template>
 
@@ -491,12 +497,24 @@ defineExpose({ back, detailTitle, usesFigmaSurface, hasWhiteHeader, showingSentR
 </script>
 
 <style scoped>
+.order-page,
 .order-list {
   display: flex;
   flex: 1;
+  min-height: 0;
   flex-direction: column;
+}
+.order-page {
+  overflow: hidden;
+}
+.order-list {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   gap: 26rpx;
   padding-bottom: 20rpx;
+}
+.order-list > * {
+  flex-shrink: 0;
 }
 .order-filters {
   display: flex;

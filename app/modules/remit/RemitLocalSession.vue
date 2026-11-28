@@ -174,7 +174,6 @@
     <RemitDrafts v-else-if="draftsOpen" class="session-content" @resume="resumeDraft" @expired="expire" />
     <RemitOrders
       v-else-if="ordersOpen && !ticketsOpen" ref="orderView" :initial-order="returnOrder" :detail-only="inboxOpen"
-      class="session-content"
       :page-visible="props.pageVisible"
       @expired="expire" @detail="orderDetail = $event" @support="supportForOrder"
       @leave="back" @remit="startAnotherRemit"
