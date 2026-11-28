@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Model\System\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class MemberSessionTest extends TestCase
@@ -133,6 +134,34 @@ class MemberSessionTest extends TestCase
         $this->get('/api/app/support/messages')->assertUnauthorized()->assertJsonPath('code', 401);
         $this->app['auth']->forgetGuards();
         $this->withToken($other->plainTextToken)->getJson('/api/app/support/messages')->assertOk();
+    }
+
+    public function test_authenticated_reads_record_token_use_once_per_minute(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        $token = User::factory()->create()->createToken('phone');
+        $this->withToken($token->plainTextToken);
+        $writes = 0;
+        DB::listen(function ($query) use (&$writes): void {
+            if (str_starts_with($query->sql, 'update "personal_access_tokens"')) {
+                $writes++;
+            }
+        });
+
+        foreach (['/app/auth/current', '/app/remittance/announcement', '/app/notifications/unread', '/app/remittance/orders'] as $path) {
+            $this->app['auth']->forgetGuards();
+            $this->getJson($path)->assertOk();
+            $this->travel(1)->second();
+        }
+        $firstUse = now()->subSeconds(4)->timestamp;
+        $this->assertSame(1, $writes);
+        $this->assertSame($firstUse, $token->accessToken->fresh()->last_used_at->timestamp);
+
+        $this->travelTo(now()->setTimestamp($firstUse + 60));
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/app/auth/current')->assertOk();
+        $this->assertSame(2, $writes);
+        $this->assertSame(now()->timestamp, $token->accessToken->fresh()->last_used_at->timestamp);
     }
 
     public function test_platform_token_cannot_be_revoked_by_member_logout(): void

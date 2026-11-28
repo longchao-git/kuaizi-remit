@@ -15,8 +15,10 @@ use App\Service\System\MemberSessionService;
 use App\Service\System\TestSmsLogin;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Events\TokenAuthenticated;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
 
@@ -55,6 +57,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+        Event::listen(TokenAuthenticated::class, $this->recordTokenUse(...));
 
         Sanctum::authenticateAccessTokensUsing(function (PersonalAccessToken $token, bool $valid): bool {
             if (! $valid) {
@@ -92,6 +95,22 @@ class AppServiceProvider extends ServiceProvider
 
             return $email !== null && $token->tokenable?->email === $email && ! $token->tokenable->is_platform_staff;
         });
+    }
+
+    /** 已通过鉴权的会话最多每分钟写一次活动时间，不参与令牌有效性判断。 */
+    private function recordTokenUse(TokenAuthenticated $event): void
+    {
+        $token = $event->token;
+        $now = now();
+        $cutoff = $now->copy()->subMinute();
+        if ($token->last_used_at?->greaterThan($cutoff)) {
+            return;
+        }
+
+        // 条件更新避免同一会话的并行请求重复写入或覆盖较新的活动时间。
+        $token->newQuery()->whereKey($token->getKey())
+            ->where(fn ($query) => $query->whereNull('last_used_at')->orWhere('last_used_at', '<=', $cutoff))
+            ->update(['last_used_at' => $now]);
     }
 
     /** 短信验证码按手机号与 IP 双维度限流，避免只换 IP 或只换号码绕过。 */

@@ -23,21 +23,25 @@ final class YabandTransport
         return $mid;
     }
 
-    /** 在商户级锁内读取加密缓存，接近过期或缓存损坏时重新鉴权。 */
+    /** 优先读取加密缓存，只有缺失或损坏时才获取商户锁并重新鉴权。 */
     public function token(): string
     {
         $mid = $this->merchantId();
         $key = $this->tokenCacheKey();
+        $token = $this->decryptCachedToken(Cache::get($key));
+        if ($token !== null) {
+            return $token;
+        }
 
         return Cache::lock($key.':lock', 20)->block(12, function () use ($key, $mid): string {
             $cached = Cache::get($key);
+            $token = $this->decryptCachedToken($cached);
+            if ($token !== null) {
+                return $token;
+            }
             if (is_string($cached)) {
-                try {
-                    return Crypt::decryptString($cached);
-                } catch (DecryptException) {
-                    // 密钥轮换或缓存损坏时，在同一把锁内重新获取 Token。
-                    Cache::forget($key);
-                }
+                // 密钥轮换或缓存损坏时，在同一把锁内重新获取 Token。
+                Cache::forget($key);
             }
 
             $password = config('yaband_remit.password');
@@ -71,6 +75,19 @@ final class YabandTransport
 
             return $token;
         });
+    }
+
+    private function decryptCachedToken(mixed $cached): ?string
+    {
+        if (! is_string($cached)) {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($cached);
+        } catch (DecryptException) {
+            return null;
+        }
     }
 
     /** 发送已准备好的业务参数；汇率请求可保留响应小数文本供精确换算。 */

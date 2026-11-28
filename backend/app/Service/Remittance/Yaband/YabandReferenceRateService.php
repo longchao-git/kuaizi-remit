@@ -24,13 +24,15 @@ final class YabandReferenceRateService
     {
         $identity = rtrim((string) config('yaband_remit.base_url'), '/').'|'.config('yaband_remit.mid');
         $key = 'yaband-remit:reference-rate:'.hash('sha256', $identity);
+        $cached = $this->cachedRate($key);
+        if ($cached !== null) {
+            return $cached;
+        }
 
         return Cache::lock($key.':lock', 45)->block(3, function () use ($key): array {
-            $cached = Cache::get($key);
-            if (is_array($cached) && is_int($cached['rate_ten_thousandths'] ?? null)
-                && $cached['rate_ten_thousandths'] >= 1 && $cached['rate_ten_thousandths'] <= 1000000
-                && is_int($cached['observed_at'] ?? null) && $cached['observed_at'] <= now()->timestamp
-                && $cached['observed_at'] > now()->timestamp - self::CACHE_SECONDS) {
+            // 等待刷新锁期间，其他请求可能已经写入有效参考汇率。
+            $cached = $this->cachedRate($key);
+            if ($cached !== null) {
                 return $cached;
             }
             Cache::forget($key);
@@ -41,6 +43,21 @@ final class YabandReferenceRateService
 
             return $result;
         });
+    }
+
+    /** @return array{rate_ten_thousandths: int, observed_at: int}|null */
+    private function cachedRate(string $key): ?array
+    {
+        $cached = Cache::get($key);
+        $now = now()->timestamp;
+        if (! is_array($cached) || ! is_int($cached['rate_ten_thousandths'] ?? null)
+            || $cached['rate_ten_thousandths'] < 1 || $cached['rate_ten_thousandths'] > 1000000
+            || ! is_int($cached['observed_at'] ?? null) || $cached['observed_at'] > $now
+            || $cached['observed_at'] <= $now - self::CACHE_SECONDS) {
+            return null;
+        }
+
+        return $cached;
     }
 
     /** 沿用项目万分位精度并四舍五入，直接处理十进制字符，不经浮点运算。 */

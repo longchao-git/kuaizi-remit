@@ -44,6 +44,21 @@ final class YabandRemitClientTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_cached_token_does_not_acquire_refresh_lock(): void
+    {
+        $this->fakeLogin(['fixture-token']);
+        $transport = app(YabandTransport::class);
+        $this->assertSame('fixture-token', $transport->token());
+        $lock = Cache::lock('yaband-remit:bearer:'.hash('sha256', 'https://remit.example.test|fixture-mid').':lock', 20);
+        $this->assertTrue($lock->get());
+        try {
+            $this->assertSame('fixture-token', $transport->token());
+        } finally {
+            $lock->release();
+        }
+        Http::assertSentCount(1);
+    }
+
     public function test_business_failure_retains_only_safe_path_and_code_for_classification(): void
     {
         Http::fake(['*/api/kyc/query' => Http::response([

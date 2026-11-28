@@ -12,6 +12,7 @@ use App\Service\Remittance\Yaband\YabandTransport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -152,6 +153,23 @@ final class YabandReferenceRateTest extends TestCase
         $this->postJson('/api/app/remittance/quotes', self::INPUT)->assertServiceUnavailable();
         $this->assertDatabaseCount('remittance_quote_records', 3);
         $this->assertSame(3, $this->queries);
+    }
+
+    public function test_cached_reference_rate_does_not_acquire_refresh_lock(): void
+    {
+        $observed = now()->timestamp;
+        $this->postJson('/api/app/remittance/quotes', self::INPUT)->assertOk();
+        $this->travelBack();
+        $lock = Cache::lock('yaband-remit:reference-rate:'.hash('sha256', 'https://rates.example.test|fixture-mid').':lock', 15);
+        $this->assertTrue($lock->get());
+        try {
+            $this->postJson('/api/app/remittance/quotes', self::INPUT)
+                ->assertOk()->assertJsonPath('data.reference_rate_observed_at', $observed);
+        } finally {
+            $lock->release();
+        }
+
+        $this->assertSame(1, $this->queries);
     }
 
     public function test_disabling_reference_rates_or_missing_signer_does_not_make_outbound_calls(): void
