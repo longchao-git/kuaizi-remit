@@ -4,6 +4,7 @@
     ref="localSession"
     :page-visible="pageVisible"
     :allow-local-login="localLoginEnabled"
+    :initial-member="authenticatedMember"
     @back="closeLocalSession"
     @terms="showAgreement('terms')"
     @privacy="showAgreement('privacy')"
@@ -347,6 +348,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { onBackPress, onHide, onShow } from "@dcloudio/uni-app";
 import { AuthRepository } from "@/modules/auth/repository/AuthRepository";
+import type { CurrentUser } from "@/modules/profile/domain/CurrentUser";
 import { UnauthorizedError } from "@/request/http";
 import { sessionService } from "@/shared/session/application/SessionService";
 import { getErrorMessage } from "@/shared/utils/error";
@@ -390,6 +392,7 @@ const smsLoginEnabled = !demoEnabled;
 const smsAutofillEnabled = import.meta.env.DEV && import.meta.env.VITE_REMIT_SMS_AUTOFILL !== "false";
 const localSessionOpen = ref((localLoginEnabled || smsLoginEnabled) && sessionService.isLoggedIn());
 const localSession = ref<InstanceType<typeof RemitLocalSession>>();
+const authenticatedMember = ref<CurrentUser>();
 const pageVisible = ref(true);
 const memberAuth = new AuthRepository();
 const smsBusy = ref(false);
@@ -893,6 +896,7 @@ function confirmNotices() {
   if (noticeOnboarding.value && smsLoginEnabled && pendingLogin) {
     sessionService.setToken(pendingLogin.token);
     sessionService.setCurrentUser(pendingLogin.member);
+    authenticatedMember.value = pendingLogin.member;
     pendingLogin = undefined;
     localSessionOpen.value = true;
   } else if (noticeOnboarding.value && demoEnabled) go(5);
@@ -900,6 +904,7 @@ function confirmNotices() {
 }
 
 function closeLocalSession() {
+  authenticatedMember.value = undefined;
   localSessionOpen.value = false;
   go(2);
 }

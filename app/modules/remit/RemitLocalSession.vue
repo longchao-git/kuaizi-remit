@@ -432,7 +432,11 @@ interface MemberRemittanceSummary {
 }
 
 const auth = new AuthRepository();
-const props = defineProps<{ pageVisible: boolean; allowLocalLogin: boolean }>();
+const props = defineProps<{
+  pageVisible: boolean;
+  allowLocalLogin: boolean;
+  initialMember?: CurrentUser;
+}>();
 const member = ref<CurrentUser>();
 const email = ref('');
 const password = ref('');
@@ -1147,6 +1151,11 @@ function resumeDraft(draft: RemitDraft) {
 
 onMounted(() => {
   if (!sessionService.getToken()) return;
+  // 短信登录已从后端取得会员资料，只有从本地恢复的会话才需要重新校验。
+  if (props.initialMember) {
+    member.value = props.initialMember;
+    return;
+  }
   void perform(async () => {
     const profile = await auth.current();
     sessionService.setCurrentUser(profile);
